@@ -37,7 +37,7 @@ function cardHtml(sym) {
   const words = x.words.map(w => `<span class="pw" data-say="${esc(w)}">${esc(w)}</span>`).join('　');
   const conf = x.confuse.length ? `<div class="ic-r">常跟 ${x.confuse.map(c => chip(c)).join(' ')} 搞混${x.confuseNote ? `：<small>${esc(x.confuseNote)}</small>` : ''}</div>` : '';
   return `<div class="ic-h"><span class="ic-sym">${esc(x.key)}</span><div><b>${esc(x.label)}</b>${x.voicing ? ` <span class="ic-badge">${esc(x.voicing)}</span>` : ''}<br><small>注音／中文：${esc(x.zh)}</small></div></div>
-<div class="ic-r">示範字（點了會唸）：${words}</div><div class="ic-r">🛠 ${esc(x.tip)}</div>${conf}`;
+<div class="ic-r">示範字（點了會唸）：${words}</div><div class="ic-r"><b>嘴型：</b>${esc(x.tip)}</div>${conf}`;
 }
 function showCard(el, pin) {
   clearTimeout(hideT);
@@ -60,14 +60,14 @@ const quizStats = () => lsGet('ipaQuiz', {});
 function pcard(sym, miss) {
   const x = phInfo(sym), n = miss[x.key] || 0;
   return `<div class="pcard${n ? ' missed' : ''}" data-play="${esc(x.key)}" title="點卡片：依序聽三個示範字">
-<div class="ph-top">${chip(x.key, { big: true })} <small>${esc(x.zh)}</small>${x.voicing ? `<span class="ic-badge">${x.voicing.slice(0, 2)}</span>` : ''}${n ? `<span class="miss-badge">🔺 常錯 ×${n}</span>` : ''}</div>
+<div class="ph-top">${chip(x.key, { big: true })} <small>${esc(x.zh)}</small>${x.voicing ? `<span class="ic-badge">${x.voicing.slice(0, 2)}</span>` : ''}${n ? `<span class="miss-badge">常錯 ×${n}</span>` : ''}</div>
 <div class="pw-row">${x.words.map(w => `<span class="pw" data-say="${esc(w)}">${esc(w)}</span>`).join('　')}</div>
-<small class="ptip">🛠 ${esc(x.tip)}</small></div>`;
+<small class="ptip">嘴型：${esc(x.tip)}</small></div>`;
 }
 export function renderPanel() {
   const miss = missRanking(getConf(), quizStats());
   const top = Object.entries(miss).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  let h = `<div class="ip-top"><b>⚠️ 你常錯的音</b> ${top.length ? top.map(([k, n]) => `${chip(k)}<small>×${n}</small>`).join('　') : '<small>尚無紀錄（用 Azure 評分或做小測驗後會出現）；之後會排在每一組的最前面</small>'}</div>`;
+  let h = `<div class="ip-top"><b>你常錯的音</b> ${top.length ? top.map(([k, n]) => `${chip(k)}<small>×${n}</small>`).join('　') : '<small>尚無紀錄（用 Azure 評分或做小測驗後會出現）；之後會排在每一組的最前面</small>'}</div>`;
   for (const g of GROUPS) {
     h += `<h4>${g.title}</h4>`;
     for (const s of g.subs) {
@@ -102,11 +102,11 @@ function askQuestion() {
   const q = quiz.qs[quiz.i], box = $('quizBox');
   const head = `<div class="qh">第 ${quiz.i + 1} / ${quiz.qs.length} 題　<small>目前答對 ${quiz.score}</small></div>`;
   if (q.type === 'words') {
-    box.innerHTML = head + `<div class="qq">🎧 聽三個字，它們<b>共同的音</b>是哪個符號？ <button class="sm" id="qHear">🔊 再聽一次</button></div>
+    box.innerHTML = head + `<div class="qq">聽三個字，它們<b>共同的音</b>是哪個符號？ <button class="btn sm" id="qHear">再聽一次</button></div>
 <div class="qopts">${q.options.map(o => `<button class="qo" data-qa="${esc(o)}">${chip(o, { big: true, plain: true })}</button>`).join('')}</div><div id="qFb"></div>`;
     speakSeq(q.words);
   } else {
-    box.innerHTML = head + `<div class="qq">符號 ${chip(q.sym, { big: true, plain: true })}（例如 <b>${esc(q.word)}</b> <button class="sm" id="qHear">🔊</button>）的聲音，哪個描述最接近？</div>
+    box.innerHTML = head + `<div class="qq">符號 ${chip(q.sym, { big: true, plain: true })}（例如 <b>${esc(q.word)}</b> <button class="btn sm" id="qHear">聽</button>）的聲音，哪個描述最接近？</div>
 <div class="qopts">${q.options.map(o => `<button class="qo" data-qa="${esc(o)}">${esc(o)}</button>`).join('')}</div><div id="qFb"></div>`;
   }
   $('qHear').onclick = () => (q.type === 'words' ? speakSeq(q.words) : speak(q.word, getRate()));
@@ -120,7 +120,7 @@ function answer(btn) {
   saveQuiz(q.sym, ok);
   document.querySelectorAll('#quizBox .qo').forEach(b => { b.disabled = true; if (b.dataset.qa === q.answer) b.classList.add('right'); else if (b === btn) b.classList.add('wrong'); });
   const info = phInfo(q.sym);
-  $('qFb').innerHTML = `<div class="${ok ? 'qok' : 'qbad'}">${ok ? '✅ 答對了！' : '❌ 答案是'} ${chip(q.sym, { big: true })} <small>${esc(info.zh)}；${info.words.map(esc).join('、')}</small></div>
+  $('qFb').innerHTML = `<div class="${ok ? 'qok' : 'qbad'}">${ok ? '答對了！' : '答案是'} ${chip(q.sym, { big: true })} <small>${esc(info.zh)}；${info.words.map(esc).join('、')}</small></div>
 <button class="primary" id="qNext">${quiz.i + 1 < quiz.qs.length ? '下一題 ▶' : '看結果'}</button>`;
   $('qNext').onclick = () => { quiz.i++; quiz.done = false; quiz.i < quiz.qs.length ? askQuestion() : finishQuiz(); };
 }

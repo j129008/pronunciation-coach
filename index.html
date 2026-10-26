@@ -1,76 +1,138 @@
-<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pronunciation Coach 英文發音教練</title>
-<link rel="stylesheet" href="style.css"></head><body>
-<header><button id="menuBtn" class="sec">☰</button><h1>🎤 發音練習</h1><div class="dash"><div id="bar"></div><div id="stats"></div></div></header>
-<div class="layout">
-<aside>
-<div class="filters">
-<div class="srow"><button id="addBtn" class="primary">📝 加入文章</button><select id="lessonSel" hidden title="只看加入的課程"></select></div>
-<div id="chips"><button class="chip on" data-st="all">全部<em></em></button><button class="chip" data-st="new">未練<em></em></button><button class="chip" data-st="weak">要加強<em></em></button><button class="chip" data-st="fair">還不錯<em></em></button><button class="chip" data-st="good">已熟練<em></em></button><button class="chip" data-st="due">待複習<em></em></button></div>
-<div id="tchips"><button class="chip on" data-t="">全部類型</button><button class="chip" data-t="sentence">句子</button><button class="chip" data-t="vocab">單字</button><button class="chip" data-t="extra">補充</button></div>
-<div class="srow"><input id="q" placeholder="🔍 搜尋英文 / 中文 / #編號"><input id="jid" placeholder="id" style="width:64px"><button id="jump" class="sec">跳</button></div>
-<small id="lcount"></small>
-</div>
-<div id="vlist"><div id="vinner"></div></div>
-</aside>
-<main>
-<div class="card" id="cur">
-<div id="meta"></div><span id="reason" style="display:none"></span>
-<div class="target" id="tgt">按「▶ 下一題」開始</div><div class="ipa" id="ipa"></div><div class="zh" id="zh"></div>
-<div class="ctrl">
-<button id="listen" class="ghost">🔊 聽 <kbd>R</kbd></button><label><input type="checkbox" id="slow"> 慢速</label><select id="voice" title="語音"></select>
-<button id="rec" class="rec">● 錄音並評分</button><button id="playMine" class="ghost" hidden>▶ 播放我的錄音</button><button id="reRec" class="ghost" hidden>↺ 重錄</button><kbd style="background:#eee">Space</kbd><span id="modeBadge" style="color:#fff;border-radius:10px;padding:2px 8px;font-size:12px"></span>
-<span class="sp"></span>
-<button id="prev" class="sec" title="上一個">◀</button><button id="next" class="sec" title="下一個（順序）">▶</button><button id="rand" class="sec" title="隨機">🎲</button>
-<button id="smart" class="primary">▶ 下一題 <kbd>N</kbd></button>
-</div>
-<div id="status"></div><div id="interim" style="color:#888"></div>
-<audio id="myAudio" controls style="display:none;margin-top:8px;width:100%"></audio>
-<div id="summary"></div>
-</div>
-<div class="card" id="result" style="display:none">
-<div>比對分數：<span class="score" id="score"></span></div>
-<div id="words"></div><div id="heardAll" style="margin-top:6px"><small></small></div>
-<div id="tips" style="margin-top:8px"></div>
-<div id="abTools" class="abtools" hidden>
-<label>我的錄音速度 <select id="segRate"><option value="0.5">0.5x</option><option value="0.6" selected>0.6x</option><option value="0.75">0.75x</option><option value="1">1x</option></select></label>
-<label>標準示範速度 <select id="stdRate"><option value="0.7" selected>慢 0.7x</option><option value="1">正常 1x</option></select></label>
-<label><input type="checkbox" id="abLoop"> 循環播放 A/B</label><button id="abStop" class="sec" hidden>■ 停止播放</button>
-</div>
-<div id="azure"></div>
-<small>綠＝正確、紅＝錯（下方小字為辨識到的字）、灰＝漏掉、黃＝多出來的字</small>
-</div>
-<div class="card">
-<details id="ipaPanel"><summary>🔤 音標教學（慢慢學 IPA）</summary>
-<p><small>每個音標都可以滑過去（手機：點一下）看發音卡；下面是全部英文音，你常錯的音會排在每組最前面並標記。</small></p>
-<div class="ip-set"><label><input type="checkbox" id="ipaTable"> 表格顯示音標</label> <label><input type="checkbox" id="ipaExpl"> 說明旁顯示音標小標籤</label> <button id="quizBtn" class="sec">🎯 小測驗</button></div>
-<div id="quizBox" hidden></div><div id="ipaGrid"></div>
-</details>
-<details><summary>🗣️ 我的常錯音（Azure 音素統計）</summary><div id="confList"></div><button id="clearConf" class="sec">清除</button></details>
-<details><summary>📋 弱點字紀錄</summary><div id="weakList"></div><button id="clearWeak" class="sec">清除紀錄</button></details>
-<details><summary>💾 備份 / 還原進度</summary><button id="exportUserBtn" class="sec">⬇ 匯出加入的文章 JSON</button> <button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" id="forgetBtn">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
-<details><summary>⚙️ 進階：Azure 發音評估（音素級分數）</summary>
-<p><small>輸入 Azure Speech 金鑰與區域（如 eastasia）。只存在本機 localStorage。</small></p>
-Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" size="10">
-<label><input type="checkbox" id="azOn"> 啟用</label><button id="azSave">儲存</button>
-</details>
-</div>
-</main></div>
-<div id="loadScreen"><div class="box"><h2>📂 載入練習資料 Load practice items</h2>
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>發音教練 Pronunciation Coach</title>
+<link rel="stylesheet" href="style.css"></head><body data-view="today">
+
+<header class="topbar">
+  <a class="brand" href="#/today">發音教練</a>
+  <nav class="tabs" id="tabs" aria-label="主選單">
+    <a href="#/today" data-tab="today">今天</a><a href="#/library" data-tab="library">課程</a><a href="#/stats" data-tab="stats">統計</a><a href="#/settings" data-tab="settings">設定</a>
+  </nav>
+</header>
+
+<main id="app">
+
+<!-- 今天 -->
+<section class="view" id="v-today"><div class="page">
+  <div class="page-h"><h1>今天練什麼</h1><span id="todayDate" class="muted"></span></div>
+  <div class="card hero" id="hero"></div>
+  <div class="statrow" id="todayStats"></div>
+  <h2>最近的課程</h2>
+  <div class="lgrid" id="todayLessons"></div>
+</div></section>
+
+<!-- 課程 -->
+<section class="view" id="v-library" hidden><div class="page">
+  <div class="page-h"><h1>課程</h1><button id="addBtn" class="btn">加入文章</button></div>
+  <input id="q" type="search" class="search" placeholder="搜尋英文或中文，例如 interview、面試" autocomplete="off">
+  <div class="chips" id="fchips"></div>
+  <div id="moreF" class="chips more" hidden></div>
+  <div id="libBody"></div>
+</div></section>
+
+<section class="view" id="v-lesson" hidden><div class="page" id="lessonPage"></div></section>
+
+<!-- 統計 -->
+<section class="view" id="v-stats" hidden><div class="page">
+  <div class="page-h"><h1>統計</h1></div>
+  <div class="statrow" id="statNums"></div>
+  <div class="card"><h2>最近 14 天</h2><div id="histChart"></div></div>
+  <div class="card"><h2>掌握度</h2><div id="masteryBar"></div></div>
+  <div class="card"><h2>常錯的音</h2><div id="weakSounds"></div>
+    <details><summary>詳細對照表</summary><div id="confList"></div><button id="clearConf" class="btn sm">清除紀錄</button></details></div>
+  <div class="card"><h2>常錯的字</h2><div id="weakList"></div><button id="clearWeak" class="btn sm">清除紀錄</button></div>
+  <div class="card"><h2>最需要加強的句子</h2><div id="weakItemsList"></div></div>
+  <div class="card" id="ipaWrap"><h2>音標教學</h2>
+    <details id="ipaPanel"><summary>展開全部英文音標與小測驗</summary>
+      <p class="muted">每個音標都可以滑過去（手機：點一下）看發音卡；你常錯的音會排在每組最前面並標記。</p>
+      <div class="ip-set"><label><input type="checkbox" id="ipaTable"> 表格顯示音標</label> <label><input type="checkbox" id="ipaExpl"> 說明旁顯示音標小標籤</label> <button id="quizBtn" class="btn sm">小測驗</button></div>
+      <div id="quizBox" hidden></div><div id="ipaGrid"></div>
+    </details></div>
+</div></section>
+
+<!-- 設定 -->
+<section class="view" id="v-settings" hidden><div class="page">
+  <div class="page-h"><h1>設定</h1></div>
+  <div class="card"><h2>每日練習</h2>
+    <label class="field">每次練習題數 <select id="sessSize"><option value="10">10 題</option><option value="15">15 題</option><option value="20">20 題</option></select></label></div>
+  <div class="card"><h2>發音評分（Azure）</h2>
+    <p class="muted">輸入 Azure Speech 金鑰與區域（如 eastasia）後可得到逐音比對。金鑰只存在這個瀏覽器的 localStorage。目前模式：<b id="modeBadge"></b></p>
+    <label class="field">金鑰 <input id="azKey" type="password" autocomplete="off"></label>
+    <label class="field">區域 <input id="azRegion" placeholder="eastasia"></label>
+    <label class="check"><input type="checkbox" id="azOn"> 啟用 Azure 評分</label>
+    <div><button id="azSave" class="btn primary">儲存</button></div></div>
+  <div class="card"><h2>聲音</h2>
+    <label class="field">示範語音 <select id="voice"></select></label></div>
+  <div class="card"><h2>資料與備份</h2>
+    <div class="btnrow"><button id="exportBtn" class="btn">匯出進度</button>
+    <label class="btn file">匯入進度<input type="file" id="importFile" accept=".json" hidden></label>
+    <button id="exportUserBtn" class="btn">匯出加入的文章</button>
+    <button class="btn" id="forgetBtn">更換練習資料</button></div>
+    <p class="muted">進度、金鑰與你加入的文章只存在這個瀏覽器；匯出的檔案不含練習資料本身。</p></div>
+</div></section>
+
+<!-- 練習（專注模式） -->
+<section class="view" id="v-practice" hidden>
+  <div class="pbar"><button id="pBack" class="btn link">← 返回</button><div class="pprog" id="pProg" hidden><i id="pProgFill"></i></div><span id="pCount" class="muted"></span></div>
+  <div class="page narrow">
+    <div class="card pr-card">
+      <div id="meta" class="meta"></div>
+      <div class="target" id="tgt"></div><div class="ipa-line" id="ipa"></div><div class="zh" id="zh"></div>
+      <div class="actions">
+        <button id="listen" class="btn">聽示範</button>
+        <label class="check"><input type="checkbox" id="slow"> 慢速</label>
+      </div>
+      <div class="recwrap"><button id="rec" class="rec-big">開始錄音</button></div>
+      <div class="actions center"><button id="playMine" class="btn" hidden>播放我的錄音</button><button id="reRec" class="btn" hidden>重錄</button></div>
+      <div id="status" class="status"></div><div id="interim" class="muted"></div>
+      <audio id="myAudio" controls hidden></audio>
+    </div>
+
+    <div id="result" class="result" hidden>
+      <details class="rsec" id="secScore" open><summary>分數</summary>
+        <div id="summary"></div>
+        <div class="scoreline">文字比對 <span class="score" id="score"></span></div>
+        <div id="words"></div><div id="heardAll"></div>
+        <div id="azScores"></div>
+        <p class="muted legend">綠＝正確、紅＝錯（下方小字為辨識到的字）、灰＝漏掉、黃＝多出來的字</p>
+      </details>
+      <details class="rsec" id="secIssues" open><summary>主要問題</summary><div id="tips"></div><div id="azIssues"></div></details>
+      <details class="rsec" id="secCards"><summary>逐音比對</summary>
+        <div id="abTools" class="abtools" hidden>
+          <label>我的錄音速度 <select id="segRate"><option value="0.5">0.5x</option><option value="0.6" selected>0.6x</option><option value="0.75">0.75x</option><option value="1">1x</option></select></label>
+          <label>標準示範速度 <select id="stdRate"><option value="0.7" selected>慢 0.7x</option><option value="1">正常 1x</option></select></label>
+          <label class="check"><input type="checkbox" id="abLoop"> 循環播放 A/B</label><button id="abStop" class="btn sm" hidden>停止播放</button>
+        </div>
+        <div id="azCards"></div></details>
+      <details class="rsec" id="secIpa"><summary>音標教學</summary><div id="resIpa"></div></details>
+    </div>
+
+    <div class="pnav"><button id="prev" class="btn">上一題</button><button id="next" class="btn primary">下一題</button></div>
+    <p class="muted keys">快捷鍵：空白鍵＝錄音／停止，N＝下一題，R＝聽示範</p>
+  </div>
+</section>
+
+<!-- 完成 -->
+<section class="view" id="v-done" hidden><div class="page narrow" id="donePage"></div></section>
+
+</main>
+
+<div id="loadScreen"><div class="box"><h2>載入練習資料</h2>
 <p>找不到 <code>data/items.json</code>。請選擇一個練習題 JSON 檔（會保存在這個瀏覽器的 IndexedDB，不會上傳）。<br><small>No <code>data/items.json</code> found. Pick a JSON file; it is stored only in this browser.</small></p>
 <p><input type="file" id="dataFile" accept=".json,application/json"></p>
-<p><button id="loadSample">試用範例資料 Try sample data</button></p>
+<p><button id="loadSample" class="btn">試用範例資料 Try sample data</button></p>
 <p><small>格式 Format：<code>[{"e":"English text","t":"sentence|vocab|extra","z":"中文","x":"example","p":"IPA","l":"L001"}]</code>，詳見 README。</small></p>
-<p id="loadErr" style="color:#b91c1c"></p></div></div>
+<p id="loadErr" class="err"></p></div></div>
+
 <dialog id="addDlg"><div class="adlg">
-<h3>📝 加入文章（課前練習）</h3>
+<h3>加入文章（課前練習）</h3>
 <label class="al-l">課程名稱／日期 <input id="addLabel" placeholder="例：L045 2026/10/28 Job interview" maxlength="80"></label>
 <div id="addDrop" class="drop"><textarea id="addText" rows="8" placeholder="貼上英文文章，或把 .txt / .md 檔拖到這裡"></textarea>
-<div><input type="file" id="addFile" accept=".txt,.md,.markdown,text/plain,text/markdown" multiple> <button id="addSplit" class="sec">✂ 拆成句子</button> <span id="addCount"></span> <span id="addMsg" class="err"></span></div></div>
-<p><small>拆句後可以直接改字、刪除，或把兩行合併；沒有拆對的地方請在這裡修正。儲存後會加在最前面的「課前練習」，不會動到原本的題目。</small></p>
+<div><input type="file" id="addFile" accept=".txt,.md,.markdown,text/plain,text/markdown" multiple> <button id="addSplit" class="btn sm">拆成句子</button> <span id="addCount"></span> <span id="addMsg" class="err"></span></div></div>
+<p class="muted">拆句後可以直接改字、刪除，或把兩行合併；沒有拆對的地方請在這裡修正。儲存後會出現在「課程」最上面的「課前練習」，不會動到原本的題目。</p>
 <ol id="addList"></ol>
-<div class="adlg-b"><button id="addSave" class="primary" disabled>💾 儲存</button> <button id="addClose" class="sec">關閉</button></div>
-<details><summary>已加入的課程（可刪除）</summary><div id="addLessons"></div><button id="addExport" class="sec">⬇ 匯出加入的文章 JSON</button></details>
+<div class="adlg-b"><button id="addSave" class="btn primary" disabled>儲存</button> <button id="addClose" class="btn">關閉</button></div>
+<details><summary>已加入的課程（可刪除）</summary><div id="addLessons"></div><button id="addExport" class="btn sm">匯出加入的文章</button></details>
 </div></dialog>
 <div id="ipaCard" hidden></div>
+<script src="config.local.js" onerror="0"></script>
 <script type="module" src="app.js"></script></body></html>

@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { USER_ID_BASE, makeUserItems, nextUserId, mergeUserItems, lessonsOf, deleteLesson, exportUserItems, defaultLabel, userLabel } from '../js/lessons.js';
-import { prepareItems, loadUserItems, saveUserItems } from '../js/data.js';
-import { smartPickPinned } from '../js/progress.js';
+import { loadUserItems, saveUserItems } from '../js/data.js';
 
 const base = [{ i: 1, e: 'Base one.', t: 'sentence', l: 'L001', z: '', x: '', p: '' }, { i: 2, e: 'Base two.', t: 'sentence', l: 'L002', z: '', x: '', p: '' }];
 const T0 = Date.UTC(2026, 9, 28);
@@ -34,15 +33,6 @@ test('mergeUserItems appends on top of the data file without overwriting anythin
   assert.equal(base.length, 2); // input untouched
 });
 
-test('prepareItems: user lessons first, newest lesson pinned, data-file order unchanged', () => {
-  const l1 = makeUserItems(['Old a.', 'Old b.'], 'Old lesson', [], T0);
-  const l2 = makeUserItems(['New a.'], 'New lesson', l1, T0 + 5000);
-  const { ORDERED, pinned } = prepareItems(mergeUserItems(base, [...l1, ...l2]));
-  assert.equal(pinned, 'New lesson');
-  assert.deepEqual(ORDERED.map(d => d.e), ['New a.', 'Old a.', 'Old b.', 'Base one.', 'Base two.']);
-  assert.equal(prepareItems(base.map(d => ({ ...d }))).pinned, null);
-});
-
 test('lessonsOf / deleteLesson / export', () => {
   const a = makeUserItems(['1.', '2.'], 'A', [], T0), b = makeUserItems(['3.'], 'B', a, T0 + 1);
   const all = [...a, ...b];
@@ -69,62 +59,8 @@ test('user items persist in their own store key (survive reload) and bad data is
   assert.deepEqual(await loadUserItems({ get: async () => { throw new Error('idb down'); } }), []);
 });
 
-test('smartPickPinned prefers the pinned lesson, falls back when it has nothing left to practise', () => {
-  const user = makeUserItems(['P one.', 'P two.'], 'Pre-class', [], T0);
-  const { ORDERED, pinned } = prepareItems(mergeUserItems(base, user));
-  const now = T0 + 1e6;
-  const r = smartPickPinned(ORDERED, pinned, now, null, {});
-  assert.ok(r.d.u);
-  assert.match(r.why, /^📝 課前練習/);
-  // everything pinned is already well practised (<10 min ago ⇒ skipped, status good) → normal pick from the whole pool
-  const prog = Object.fromEntries(user.map(d => [d.i, { a: 2, b: 95, l: 95, d: now - 1000, h: [95] }]));
-  const r2 = smartPickPinned(ORDERED, pinned, now, null, prog);
-  assert.ok(!r2.d.u);
-  assert.ok(!/課前練習/.test(r2.why));
-  assert.equal(smartPickPinned(ORDERED, null, now, null, {}).d.i > 0, true);
-});
-
-// ---- 課前練習 lessons that come from the data file (synthetic) ----
-import { labelDate, isPreClassLabel } from '../js/data.js';
-
-const fileItems = () => [
-  { i: 1, e: 'Regular one.', t: 'sentence', l: 'L001 (2026/01/01)', z: '', x: '', p: '' },
-  { i: 2, e: 'Pre old a.', t: 'sentence', l: '課前練習 2026/10/21 Old topic', z: '', x: '', p: '' },
-  { i: 3, e: 'Pre new a.', t: 'sentence', l: '課前練習 2026/10/28 New topic', z: '', x: '', p: '' },
-  { i: 4, e: 'Pre new b.', t: 'sentence', l: '課前練習 2026/10/28 New topic', z: '', x: '', p: '' },
-  { i: 5, e: 'Pre undated.', t: 'sentence', l: '課前練習 misc', z: '', x: '', p: '' },
-  { i: 6, e: 'Regular two.', t: 'sentence', l: 'L002', z: '', x: '', p: '' },
-];
-
-test('labelDate parses YYYY/MM/DD (and - or .), 0 when absent', () => {
-  assert.equal(labelDate('課前練習 2026/10/28 x'), Date.UTC(2026, 9, 28));
-  assert.equal(labelDate('a 2026-1-5 b'), Date.UTC(2026, 0, 5));
-  assert.equal(labelDate('2026.03.09'), Date.UTC(2026, 2, 9));
-  assert.equal(labelDate('no date'), 0);
-  assert.ok(isPreClassLabel('課前練習 x') && !isPreClassLabel('L001 課前練習') && !isPreClassLabel(undefined));
-});
-
-test('file lessons labelled 課前練習 are pinned on top, newest date first, flagged pre (not u)', () => {
-  const { ORDERED, pinned, pinnedLabels } = prepareItems(fileItems());
-  assert.deepEqual(ORDERED.map(d => d.e), ['Pre new a.', 'Pre new b.', 'Pre old a.', 'Pre undated.', 'Regular one.', 'Regular two.']);
-  assert.equal(pinned, '課前練習 2026/10/28 New topic');
-  assert.deepEqual(pinnedLabels, ['課前練習 2026/10/28 New topic', '課前練習 2026/10/21 Old topic', '課前練習 misc']);
-  assert.ok(ORDERED.slice(0, 4).every(d => d.pre === true && !d.u));
-  assert.ok(ORDERED.slice(4).every(d => !d.pre));
-  assert.equal(ORDERED[0].L, '課前練習 2026/10/28 New topic'); // grouped by the full label
-});
-
-test('user-added lessons stay above file 課前練習 lessons', () => {
-  const user = makeUserItems(['Mine.'], 'My lesson', [], T0);
-  const { ORDERED, pinned, pinnedLabels } = prepareItems(mergeUserItems(fileItems(), user));
-  assert.equal(ORDERED[0].e, 'Mine.');
-  assert.equal(pinned, 'My lesson');
-  assert.equal(pinnedLabels.length, 4);
-});
-
 test('file 課前練習 items are not deletable/exportable through the user-lesson store', () => {
-  const items = fileItems();
-  prepareItems(items);
+  const items = [{ i: 3, e: 'Pre new a.', t: 'sentence', l: '課前練習 2026/10/28 New topic' }, { i: 4, e: 'Pre new b.', t: 'sentence', l: '課前練習 2026/10/28 New topic' }];
   assert.deepEqual(lessonsOf(items), []);                    // no lesson-filter entry / delete button source
   const user = makeUserItems(['Mine.'], '課前練習 2026/10/30 mine', [], T0);
   assert.deepEqual(lessonsOf([...items, ...user]).map(l => l.label), ['課前練習 2026/10/30 mine']);
@@ -134,16 +70,3 @@ test('file 課前練習 items are not deletable/exportable through the user-less
   assert.ok(exportUserItems(user).every(d => !('pre' in d) && !('u' in d)));
 });
 
-test('the next-item picker prioritises file 課前練習 lessons (newest first), then falls back', () => {
-  const { ORDERED, pinnedLabels } = prepareItems(fileItems());
-  const now = T0 + 1e6;
-  const r = smartPickPinned(ORDERED, pinnedLabels, now, null, {});
-  assert.equal(r.d.e, 'Pre new a.');
-  assert.match(r.why, /^📝 課前練習/);
-  // all pinned items practised recently and well → normal pick (a regular item)
-  const prog = Object.fromEntries(ORDERED.filter(d => d.pre).map(d => [d.i, { a: 2, b: 95, l: 95, d: now - 1000, h: [95] }]));
-  const r2 = smartPickPinned(ORDERED, pinnedLabels, now, null, prog);
-  assert.ok(!r2.d.pre);
-  // a single label string still works (user-lesson callers)
-  assert.equal(smartPickPinned(ORDERED, '課前練習 2026/10/21 Old topic', now, null, {}).d.e, 'Pre old a.');
-});

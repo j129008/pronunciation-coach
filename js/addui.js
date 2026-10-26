@@ -1,4 +1,4 @@
-// "📝 加入文章" dialog: paste / drop an article → split into sentences → edit the preview → save as a lesson.
+// "加入文章" dialog: paste / drop an article → split into sentences → edit the preview → save as a lesson.
 import { $, esc } from './util.js';
 import { splitSentences, mergeLines } from './sentences.js';
 
@@ -7,10 +7,10 @@ const MAX_LINES = 1000;
 
 function renderPreview() {
   $('addList').innerHTML = lines.map((s, k) => `<li data-k="${k}"><input class="ln" value="${esc(s)}" aria-label="第 ${k + 1} 句">
-<button class="sm sec" data-act="up" title="跟上一句合併"${k ? '' : ' disabled'}>⤴ 併上句</button><button class="sm sec" data-act="down" title="跟下一句合併"${k < lines.length - 1 ? '' : ' disabled'}>⤵ 併下句</button><button class="sm sec" data-act="del" title="刪除這句">🗑</button></li>`).join('');
+<button class="btn sm" data-act="up" title="跟上一句合併"${k ? '' : ' disabled'}>併上句</button><button class="btn sm" data-act="down" title="跟下一句合併"${k < lines.length - 1 ? '' : ' disabled'}>併下句</button><button class="btn sm" data-act="del" title="刪除這句">刪除</button></li>`).join('');
   $('addCount').textContent = lines.length ? `共 ${lines.length} 句` : '';
   $('addSave').disabled = !lines.some(s => s.trim());
-  $('addSave').textContent = lines.length ? `💾 儲存 ${lines.filter(s => s.trim()).length} 句` : '💾 儲存';
+  $('addSave').textContent = lines.length ? `儲存 ${lines.filter(s => s.trim()).length} 句` : '儲存';
 }
 
 function split() {
@@ -31,7 +31,7 @@ async function readFiles(files) {
 
 export function renderAddLessons(lessons) {
   $('addLessons').innerHTML = lessons.length
-    ? lessons.map(l => `<div class="al"><span>${esc(l.label)} <small>（${l.count} 句）</small></span><button class="sm sec" data-dellesson="${esc(l.label)}">🗑 刪除</button></div>`).join('')
+    ? lessons.map(l => `<div class="al"><span>${esc(l.label)} <small>（${l.count} 句）</small></span><button class="btn sm" data-dellesson="${esc(l.label)}">刪除</button></div>`).join('')
     : '<small>還沒有加入的課程</small>';
 }
 
@@ -48,7 +48,7 @@ export function initAdd({ onSave, onDeleteLesson, onExport }) {
   dlg.addEventListener('drop', async e => { e.preventDefault(); await readFiles([...e.dataTransfer.files]); });
   $('addList').addEventListener('input', e => { const li = e.target.closest('li'); if (li && e.target.classList.contains('ln')) { lines[+li.dataset.k] = e.target.value; renderPreview2(); } });
   // typing must not rebuild the list (focus!) — only refresh counters
-  function renderPreview2() { $('addSave').disabled = !lines.some(s => s.trim()); $('addSave').textContent = `💾 儲存 ${lines.filter(s => s.trim()).length} 句`; }
+  function renderPreview2() { $('addSave').disabled = !lines.some(s => s.trim()); $('addSave').textContent = `儲存 ${lines.filter(s => s.trim()).length} 句`; }
   $('addList').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'), li = e.target.closest('li');
     if (!b || !li) return;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusOf, smartPick } from '../js/progress.js';
+import { statusOf } from '../js/progress.js';
 import { DAY } from '../js/util.js';
 
 const now = Date.UTC(2026, 0, 10);
@@ -13,13 +13,4 @@ const prog = {
 
 test('statusOf thresholds', () => {
   assert.deepEqual([1, 2, 3, 4, 5].map(i => statusOf(i, now, prog)), ['good', 'due', 'weak', 'fair', 'new']);
-});
-
-test('smartPick offers a review item first, then new items; never the last item', () => {
-  const pool = [1, 2, 3, 4, 5, 6].map(i => ({ i }));
-  const first = smartPick(pool, now, null, prog);
-  assert.equal(first.d.i, 2); // oldest due
-  const second = smartPick(pool, now, 2, prog);
-  assert.equal(second.d.i, 5); // new
-  assert.notEqual(smartPick(pool, now, 5, prog).d.i, 5);
 });

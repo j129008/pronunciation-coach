@@ -1,4 +1,4 @@
-// User-added lessons ("📝 加入文章"): items live in IndexedDB next to — never inside — the loaded data set.
+// User-added lessons ("加入文章"): items live in IndexedDB next to — never inside — the loaded data set.
 // Ids start at USER_ID_BASE so they can never collide with the data file's ids; progress is keyed by id.
 export const USER_ID_BASE = 1000000;
 export const userLabel = d => '#U' + (d.i - USER_ID_BASE);

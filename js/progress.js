@@ -124,65 +124,10 @@ export function importProgress(o) {
   reloadProg();
 }
 
-// smart pick: alternates review (due/weak) with new items; skips items practiced <10 min ago
-let pickN = 0;
-const seenS = new Set();
-export const markSeen = id => seenS.add(id);
-
 // removes progress for deleted items
 export function forgetItems(ids) {
   const wi = getWeakItems();
   for (const id of ids) { delete PROG[id]; delete wi[id]; }
   saveProg();
   localStorage.weakItems = JSON.stringify(wi);
-}
-
-// prefer the pinned (課前練習) lessons — a label or a list of labels — while they still have something
-// to practise (pool order = display order, so the top lesson wins), else the whole pool
-export function smartPickPinned(pool, pinned, now, lastId, prog = PROG) {
-  const labels = [].concat(pinned || []);
-  if (labels.length) {
-    const pp = pool.filter(d => (d.u || d.pre) && labels.includes(d.L));
-    if (pp.length) {
-      const r = smartPick(pp, now, lastId, prog);
-      if (r && !r.fallback) return { ...r, why: '📝 課前練習｜' + r.why };
-    }
-  }
-  return smartPick(pool, now, lastId, prog);
-}
-
-export function smartPick(pool, now, lastId, prog = PROG) {
-  now = now || Date.now();
-  const recent = 10 * 60 * 1000;
-  const fresh = d => { const p = prog[d.i]; return !p || now - p.d >= recent; };
-  const due = [], weak = [], fair = [], neu = [];
-  for (const d of pool) {
-    if (d.i === lastId || seenS.has(d.i)) continue;
-    const s = statusOf(d.i, now, prog);
-    if (s === 'new') neu.push(d);
-    else if (!fresh(d)) continue;
-    else if (s === 'due') due.push(d);
-    else if (s === 'weak') weak.push(d);
-    else if (s === 'fair') fair.push(d);
-  }
-  due.sort((a, b) => prog[a.i].d - prog[b.i].d);
-  weak.sort((a, b) => prog[a.i].l - prog[b.i].l);
-  fair.sort((a, b) => prog[a.i].l - prog[b.i].l);
-  const review = due.concat(weak);
-  const wantReview = pickN % 3 === 0;
-  pickN++;
-  const why = d => {
-    const p = prog[d.i], s = statusOf(d.i, now, prog);
-    if (s === 'new') return '🆕 新題';
-    if (s === 'due') return `⏰ 已熟練但 ${Math.floor((now - p.d) / DAY)} 天沒練，複習一下`;
-    return `🔁 上次 ${p.l} 分，再練一次`;
-  };
-  const d = (wantReview && review[0]) || neu[0] || review[0] || fair[0];
-  if (!d && seenS.size) { seenS.clear(); return smartPick(pool, now, lastId, prog); }
-  if (!d) {
-    const all = pool.filter(x => x.i !== lastId && prog[x.i]).sort((a, b) => prog[a.i].d - prog[b.i].d);
-    if (all[0]) return { d: all[0], why: '🔄 都練得不錯！複習最久沒練的', fallback: true };
-    return null;
-  }
-  return { d, why: why(d) };
 }
