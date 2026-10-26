@@ -4,6 +4,7 @@
 
 <header class="topbar">
   <a class="brand" href="#/today">發音教練</a>
+  <label class="playvol" title="只調網站播放的音量，不影響耳機聽自己的聲音" style="display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap">播放音量 <input type="range" id="playVol" min="0" max="100" step="5" style="width:110px"> <span id="playVolPct"></span></label>
   <nav class="tabs" id="tabs" aria-label="主選單">
     <a href="#/today" data-tab="today">今天</a><a href="#/library" data-tab="library">課程</a><a href="#/stats" data-tab="stats">統計</a><a href="#/settings" data-tab="settings">設定</a>
   </nav>
@@ -134,5 +135,6 @@
 <details><summary>已加入的課程（可刪除）</summary><div id="addLessons"></div><button id="addExport" class="btn sm">匯出加入的文章</button></details>
 </div></dialog>
 <div id="ipaCard" hidden></div>
+<script src="js/volume.js"></script>
 <script src="config.local.js" onerror="0"></script>
 <script type="module" src="app.js"></script></body></html>
