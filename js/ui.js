@@ -3,11 +3,11 @@ import { $, esc, dkey } from './util.js';
 import { IDB, validItems, prepareItems } from './data.js';
 import * as P from './progress.js';
 import { scoreHyp, tipsFor } from './align.js';
-import { phTip, ipaInfo, ipaHint, analyzeWord, ERR_ZH } from './phonemes.js';
+import { ipaInfo, analyzeWord, ERR_ZH } from './phonemes.js';
 import { fillVoices, speak, stopSpeaking } from './tts.js';
 import { playSeg, stopSeg } from './playback.js';
 import { encodeWav, captureMic, assess } from './azure.js';
-import { explain, respell } from './explain.js';
+import { explain, respell, respellWord, plainSound } from './explain.js';
 
 const TL = { sentence: '句子', vocab: '單字', extra: '補充' };
 const ST = { new: ['未練', '#b0b4bd'], weak: ['要加強', '#e5484d'], fair: ['還不錯', '#f5a524'], good: ['已熟練', '#30a46c'], due: ['待複習', '#7c5cff'] };
@@ -185,9 +185,10 @@ function renderWeak() {
 function renderConf() {
   const c = P.getConf();
   const arr = Object.entries(c).sort((a, b) => b[1].n - a[1].n).slice(0, 15);
-  $('confList').innerHTML = arr.length ? '<table class="cmp"><tr><th>標準</th><th>你常唸成</th><th>次數</th><th>例字</th><th>建議</th></tr>' + arr.map(([k, v]) => {
+  $('confList').innerHTML = arr.length ? '<table class="cmp"><tr><th>該唸</th><th>你常唸成</th><th>次數</th><th>例字</th><th>說明</th></tr>' + arr.map(([k, v]) => {
     const [e, h] = k.split('→');
-    return `<tr><td class="pe">/${esc(e)}/</td><td class="ph-bad">/${esc(h)}/</td><td>${v.n}</td><td>${esc((v.w || []).slice(-4).join(', '))}</td><td><small>${esc(phTip(e, h, false, ''))}</small></td></tr>`;
+    const x = explain(e, h, { word: (v.w || []).slice(-1)[0] });
+    return `<tr><td class="pe">${esc(respell([e]))}</td><td class="ph-bad">${h === '—' ? '（沒唸）' : esc(respell([h]))}</td><td>${v.n}</td><td>${esc((v.w || []).slice(-4).join(', '))}</td><td><small>${x ? `<b>${esc(x.typeLabel)}</b> ${esc(x.verdict)}<br>🛠 ${esc(x.fix)}` : ''}</small></td></tr>`;
   }).join('') + '</table>' : '<small>尚無紀錄（使用 Azure 模式後會累積）</small>';
 }
 function showResult(best, alts) {
@@ -268,9 +269,13 @@ async function runAB(text, off, dur) {
 const abWord = wi => { const w = azWords[wi]; if (w && w.et !== 'Omission') runAB(w.word, w.offset, w.dur); };
 const abPhoneme = (wi, k) => { const w = azWords[wi], r = w && w.rows[k]; if (r && w.et !== 'Omission') runAB(w.word, r.off, r.dur); };
 
-const explainHtml = x => !x ? '' : `<div class="xp">你：${esc(x.did)}<br>應該：${esc(x.should)}<br>🛠 ${esc(x.fix)}</div>` +
+const explainHtml = x => !x ? '' : `<div class="vd"><b class="tl ${x.type}">${esc(x.typeLabel)}</b> ${esc(x.verdict)}</div><div class="xp">🛠 ${esc(x.fix)}</div>` +
   (x.pairs.length ? '<div class="xp">對比字（點了會唸）：' + x.pairs.map(([a, b]) => `<span class="pw" data-say="${esc(a)}">${esc(a)}</span> / <span class="pw" data-say="${esc(b)}">${esc(b)}</span>`).join('　') + '</div>' : '');
-const spelled = w => ({ target: respell(w.rows.map(r => r.exp)), said: respell(w.rows.map(r => (r.bad ? r.heard : r.exp))) });
+const spellHtml = w => {
+  const sp = respellWord(w.rows);
+  return !sp.differs ? '' : `<div class="rsp">整個字聽起來像 <b class="rs bad">${esc(sp.said) || '（沒唸出來）'}</b>　正確是 <b class="rs">${esc(sp.target)}</b> <small>（大寫＝出問題的音節）</small></div>`;
+};
+const cellText = (ph, bad) => (ph === '—' ? '—' : respell([ph]));
 
 function playMine() {
   const a = $('myAudio');
@@ -424,22 +429,23 @@ function renderAzure(j) {
   }
   let h = `<hr><b>Azure 評估</b>：總分 ${f(p.PronScore)}・準確度 ${f(p.AccuracyScore)}・流暢度 ${f(p.FluencyScore)}・完整度 ${f(p.CompletenessScore)}・韻律 ${f(p.ProsodyScore)}
  <div style="margin:6px 0"><button id="abAll">🔁 整句 A/B（標準 → 我的）</button></div>`;
+  const spShown = new Set();
   if (top.length) h += '<div class="issues"><b>🎯 你這句最需要改的音</b><ol>' + top.map(x => {
-    const sp = spelled(words[x.wi]);
-    return `<li><b>${esc(x.w)}</b>　目標讀法 <span class="rs">${esc(sp.target)}</span> → 你聽起來像 <span class="rs bad">${esc(sp.said) || '（沒唸出來）'}</span><br>
- /<span class="pe">${esc(x.r.exp)}</span>/ → /<span class="ph-bad">${esc(x.r.heard)}</span>/${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w }))}
+    const sp = spShown.has(x.wi) ? '' : spellHtml(words[x.wi]);
+    spShown.add(x.wi);
+    return `<li><b>${esc(x.w)}</b>${sp}${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w, letters: x.r.let }))}
  ${lastCap && words[x.wi].et !== 'Omission' ? `<button class="sm" data-abp="${x.wi},${x.ki}">⇄ A/B：標準 → 我的</button>` : ''}</li>`;
   }).join('') + '</ol></div>';
   else h += '<div class="issues">🎉 沒有明顯的錯誤音素！</div>';
   h += '<div class="cards">' + words.map((w, i) => {
     const cls = w.et === 'Omission' ? 'miss' : (w.et === 'None' && w.score >= 80 ? 'ok' : 'bad');
-    const sp = spelled(w), canPlay = w.et !== 'Omission' && lastCap;
+    const canPlay = w.et !== 'Omission' && lastCap;
     return `<div class="wcard ${cls}"><div><b style="font-size:18px">${esc(w.word)}</b> <small>${f(w.score)}分 ${ERR_ZH[w.et] ? '・' + ERR_ZH[w.et] : ''}</small>
   <button class="sm" data-std="${i}">🔊 標準</button>${canPlay ? `<button class="sm" data-mine="${i}">🎤 我的</button><button class="sm" data-abw="${i}">⇄ A/B</button>` : ''}</div>
-  ${sp.target !== sp.said ? `<div class="rsp">目標讀法 <b class="rs">${esc(sp.target)}</b>　你聽起來像 <b class="rs bad">${esc(sp.said) || '（沒唸出來）'}</b></div>` : ''}
+  ${spellHtml(w)}
   <table class="cmp"><tr><th>字母</th>${w.rows.map(r => `<td class="lt">${esc(r.let || '')}</td>`).join('')}</tr>
-  <tr><th>標準<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'pe' : ''}" data-pe="${i},${k}" title="${esc(ipaHint(r.exp))}">${esc(r.exp)}</td>`).join('')}</tr>
-  <tr><th>你的<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'ph-bad' : 'ph-ok'}" data-ph="${i},${k}" title="${esc(r.heard !== r.exp && r.heard !== '—' ? '你唸成 ' + ipaHint(r.heard) : '點我聽你自己這個音')}">${esc(r.heard)}</td>`).join('')}</tr>
+  <tr><th>標準<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'pe' : ''}" data-pe="${i},${k}" title="${esc(plainSound(r.exp))}">${esc(cellText(r.exp))}</td>`).join('')}</tr>
+  <tr><th>你的<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'ph-bad' : 'ph-ok'}" data-ph="${i},${k}" title="${esc(r.bad && r.heard !== '—' ? '你唸成 ' + plainSound(r.heard) : '點我聽你自己這個音')}">${esc(cellText(r.bad ? r.heard : r.exp))}</td>`).join('')}</tr>
   <tr><th>分數</th>${w.rows.map(r => `<td><small>${f(r.score)}</small></td>`).join('')}</tr>
   ${canPlay ? `<tr><th>A/B</th>${w.rows.map((r, k) => `<td><button class="sm" data-abp="${i},${k}" title="標準單字 → 你的這個音">⇄</button></td>`).join('')}</tr>` : ''}</table><div class="phint" id="phint${i}"></div></div>`;
   }).join('') + '</div>';
@@ -468,14 +474,12 @@ function onAzureClick(e) {
     const box = document.getElementById('phint' + wi);
     if (pe) {
       const x = ipaInfo(r.exp);
-      if (box) box.innerHTML = `🔊 <b>${esc(r.let || '')}</b> → ${esc(ipaHint(r.exp))}` + (x ? `　<small>示範字：<b>${esc(x.w)}</b>，接著唸 ${esc(w.word)}</small>` : '');
+      if (box) box.innerHTML = `🔊 <b>${esc(r.let || '')}</b> → ${esc(plainSound(r.exp))}` + (x ? `　<small>示範字：<b>${esc(x.w)}</b>，接著唸 ${esc(w.word)}</small>` : '');
       if (x) speak(x.w, stdRate(), () => speak(w.word, stdRate())); else speak(w.word, stdRate());
     } else {
-      let m = '🎤 你的這個音';
-      if (r.heard === '—') m = '⚠️ 這個音你沒唸出來（漏音）';
-      else if (r.heard !== r.exp) m += `：你唸成 ${esc(ipaHint(r.heard))}<br>✅ 應該是 ${esc(ipaHint(r.exp))}`;
-      else m += `：${esc(ipaHint(r.exp))}`;
-      m += explainHtml(explain(r.exp, r.heard, { isFinal: r.isFinal, word: w.word }));
+      const ex = r.bad ? explain(r.exp, r.heard, { isFinal: r.isFinal, word: w.word, letters: r.let }) : null;
+      let m = ex ? '🎤 你的這個音' : `🎤 這個音唸得不錯：${esc(plainSound(r.exp))}`;
+      m += explainHtml(ex);
       if (!lastCap || r.off == null || w.et === 'Omission') m += '<br><small>（沒有錄音或時間資料可播）</small>';
       else { cancelAll(); playSeg(lastCap, r.off, r.dur, { rate: segRate() }); }
       if (box) box.innerHTML = m;
