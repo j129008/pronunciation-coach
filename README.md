@@ -15,6 +15,7 @@ A single-page, no-build web app for practicing English pronunciation sentence by
 - **“What did I actually say?”** (Azure mode): no IPA is shown in explanations. Each wrong sound gets a one-line verdict — `少唸了` (e.g. 「or」少了捲舌的 r，你只唸了「歐」，要唸成「歐兒」), `多唸了`, or `唸成別的音` (d 唸成了 t：太硬像「特」，要輕、喉嚨震動像「的」) — then a whole-word respelling (`uh-FAW-duh-bul` vs `uh-FOR-duh-bul`, capitals = the problem syllable), one mouth/tongue fix tip and two clickable minimal-pair words. Compound sounds (r-colored vowels, diphthongs, ch/j) where you produced only part are treated as 少唸了. The table covers common Mandarin-speaker confusions (t/d, s/z, f/v, v/w, o/aw, m/n and n/ng endings, th/s, th/d, l/n, r/l, i/ee, a/e, oo, …) with a generic fallback built from mouth-movement notes.
 - **Hear your own sound clearly**: clicking a `你的` cell plays your whole word (slowed, padded) and lights up the mispronounced sound while it plays; `🔍 只聽這段（放慢）` plays just that sound with 250 ms of context each side at 0.5x. `🔈 聽起來像 → 正確` speaks the respelling of what you actually said (e.g. “ree”) and then the correct word (“we”): 電腦聽你唸成「ree」，正確是「we」.
 - **A/B compare**: `⇄` buttons per word and per phoneme (and in the “🎯 你這句最需要改的音” list) play the standard word, a short pause, then your own slice; tick `循環播放 A/B` to loop, `■ 停止播放` to stop.
+- **Learn IPA gradually**: explanations stay in plain language; after each one a small grey `音標：w → ɹ` row shows the symbols. Every IPA symbol anywhere (word-card table cells, that row, the item's own IPA line, the confusion table, the panel) has a tooltip card — hover on desktop, tap on phones — with the symbol, 注音/中文 approximation, 3 clickable example words, a one-line mouth/tongue tip and “常跟哪個音搞混”. `🔤 音標教學（慢慢學 IPA）` lists all English sounds (母音 / 雙母音 / 子音, voiced/voiceless pairs side by side); tap a card to hear its three words; sounds you often miss (from Azure runs and quiz mistakes) are marked 🔺 and sorted first. `🎯 小測驗` asks 10 questions: hear 3 words → pick the shared symbol, or symbol → pick the right 注音 description. Two checkboxes there switch `表格顯示音標` and `說明旁顯示音標小標籤` on/off (both default on; they apply to the next result).
 - **Progress tracking**: per-item attempts / best / last / history, statuses (new / needs work / good / mastered / due for review), lesson-grouped sidebar, dashboard with streak, smart `▶ 下一題` (1 review : 2 new), weak-phoneme stats.
 - Keyboard: `Space` record/stop, `N` next, `R` listen. `💾 備份 / 還原進度` exports / imports progress JSON.
 - Responsive: on phones the item list becomes a drawer opened with `☰`.
@@ -27,7 +28,7 @@ python3 -m http.server 8000
 Microphone access requires `localhost` or HTTPS. The app uses ES modules, so it must be served over HTTP (as above); opening `index.html` via `file://` does not work.
 
 ### Code layout
-`app.js` (entry) + `js/`: `data.js` (load/validate items), `normalize.js` + `align.js` (text normalizer, alignment, tips), `phonemes.js` (IPA hints, Azure word → phoneme rows), `explain.js` (respelling, articulation diffs, minimal pairs), `azure.js` (mic capture, WAV, REST call), `tts.js`, `playback.js` (segment playback), `progress.js` (localStorage progress, smart pick), `ui.js` (DOM).
+`app.js` (entry) + `js/`: `data.js` (load/validate items), `normalize.js` + `align.js` (text normalizer, alignment, tips), `phonemes.js` (IPA hints, Azure word → phoneme rows), `explain.js` (respelling, articulation diffs, minimal pairs), `ipa.js` + `ipaui.js` (IPA learning panel, tooltip cards, quiz), `azure.js` (mic capture, WAV, REST call), `tts.js`, `playback.js` (segment playback), `progress.js` (localStorage progress, smart pick), `ui.js` (DOM).
 
 ### Tests
 ```bash
@@ -74,6 +75,7 @@ MIT
 - **「我到底唸成什麼？」**（Azure 模式）：說明裡完全不出現音標。每個錯誤音先給一句白話判定——`少唸了`（例：「or」少了捲舌的 r，你只唸了「歐」，要唸成「歐兒」）、`多唸了`、`唸成別的音`（例：d 唸成了 t：太硬像「特」，要輕、喉嚨震動像「的」）——再用英文字母拼出「整個字聽起來像」與正確讀法的對照（如 `uh-FAW-duh-bul` vs `uh-FOR-duh-bul`，大寫＝出問題的音節），最後給一個嘴型／舌頭的練習提示與兩組可點擊試聽的對比字。複合音（捲舌母音、雙母音、ch/j）只唸出一部分時視為「少唸了」。涵蓋華語使用者常見混淆，沒收錄的組合會用嘴型說明自動產生。
 - **聽清楚自己的音**：點 `你的` 格會慢速播放你整個單字（前後留白），並在播到唸錯的音時把它標亮；`🔍 只聽這段（放慢）` 只播那個音，前後各多留 250 毫秒、0.5 倍速；`🔈 聽起來像 → 正確` 先唸出電腦聽到的拼法（如 ree）再唸正確單字（we）：電腦聽你唸成「ree」，正確是「we」。
 - **A/B 對照**：單字與音素旁的 `⇄` 鈕（以及「🎯 你這句最需要改的音」清單）會先播標準單字、停一下、再播你的那一段；勾選 `循環播放 A/B` 可重複，`■ 停止播放` 停止。播放速度可用 `我的錄音速度`（0.5x／0.6x 預設／0.75x／1x，音高不變）與 `標準示範速度` 調整。
+- **慢慢學音標**：說明文字仍是白話中文，後面多一行小小的灰色 `音標：w → ɹ`。畫面上每個音標符號（單字卡表格、這一行、題目自帶的音標、常錯音表格、教學面板）都有提示卡——電腦版滑過去、手機點一下——內容有符號、注音／中文近似、三個可點擊聽的示範字、一句嘴型／舌頭提示，以及「常跟哪個音搞混」。`🔤 音標教學（慢慢學 IPA）` 列出全部英文音（母音／雙母音／子音，清濁成對並排），點卡片會依序唸三個示範字；你常錯的音（來自 Azure 評分與小測驗答錯）會標 🔺 並排在每組最前面。`🎯 小測驗` 共 10 題：聽三個字選出共同的符號，或看符號選出正確的注音描述。面板內可開關 `表格顯示音標`、`說明旁顯示音標小標籤`（預設都開，下次結果起生效）。
 - **進度追蹤**：每題練習次數、最高分、最近分數、歷史；狀態（未練／要加強／還不錯／已熟練／待複習）；依課程分組的側欄；儀表板與連續天數；智慧 `▶ 下一題`（1 題複習：2 題新題）；常錯音統計。
 - 快捷鍵：`Space` 錄音／停止、`N` 下一題、`R` 聽。`💾 備份 / 還原進度` 可匯出／匯入進度 JSON。手機上題目清單會收進 `☰` 抽屜。
 
