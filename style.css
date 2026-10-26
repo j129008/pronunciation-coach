@@ -150,6 +150,7 @@ td.lt{color:#64748b;font-family:monospace;font-size:13px}.phint{margin-top:6px;f
 .vd{margin:4px 0;line-height:1.6}.tl{border-radius:5px;padding:0 6px;color:#fff;font-size:12px;background:#888}.tl.del,.tl.omit{background:var(--bad)}.tl.ins{background:var(--warn)}.tl.sub{background:var(--due)}
 .xp{font-size:14px;line-height:1.65;color:#334155;margin:4px 0}.pw{cursor:pointer;color:#1c7ed6;border-bottom:1px dotted #1c7ed6}
 .rs{font-family:ui-monospace,Menlo,monospace;background:var(--pri-l);color:#1e3a8a;border-radius:4px;padding:0 5px}.rs.bad{background:#fdd;color:#a00}.rsp{margin:4px 0;font-size:14px}
+.hint1{margin:4px 0;font-size:14px;color:#1e293b}.lowconf{margin:4px 0;padding:4px 8px;font-size:12.5px;background:#fff8e1;border-left:3px solid #f08c00;color:#7a4b00;border-radius:4px}
 
 /* ============ 完成 ============ */
 .done{text-align:center;padding:var(--s6) var(--s5)}.done h1{font-size:34px;margin:var(--s2) 0}.done .ilist{text-align:left}.done .btnrow{justify-content:center}

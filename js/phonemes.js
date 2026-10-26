@@ -96,6 +96,8 @@ export function analyzeWord(w){const wa=w.PronunciationAssessment||w;const et=wa
   let heard=nb.length?nb[0].Phoneme:ph.Phoneme;if(et==='Omission')heard='—';
   const bad=et==='Omission'||(s<60)||(heard!==ph.Phoneme&&s<80);if(bad&&heard===ph.Phoneme){heard=(nb.find(x=>x.Phoneme!==ph.Phoneme)||{}).Phoneme||'?';if(s<45&&nb.length&&nb[0].Phoneme===ph.Phoneme&&nb[0].Score>=90)heard=ph.Phoneme}
   if(bad&&s<30&&nb.length&&nb[0].Score<30)heard='—';
-  return {exp:ph.Phoneme,heard,score:s,bad:bad&&heard!==ph.Phoneme,isFinal:i===phs.length-1,off:ph.Offset,dur:ph.Duration}});
+  // recognizer confidence: NBest score of the sound we report as heard, and of the expected sound (null = not listed)
+  const nbScore=p=>{const x=nb.find(c=>c.Phoneme===p);return x?x.Score:null};
+  return {exp:ph.Phoneme,heard,score:s,bad:bad&&heard!==ph.Phoneme,isFinal:i===phs.length-1,off:ph.Offset,dur:ph.Duration,heardConf:nb.length?nbScore(heard):null,expConf:nb.length?nbScore(ph.Phoneme):null}});
  const lt=alignLetters(w.Word,rows.map(r=>r.exp));rows.forEach((r,i)=>r.let=lt[i]);
  return {word:w.Word,et,score:wa.AccuracyScore,rows,offset:w.Offset,dur:w.Duration}}

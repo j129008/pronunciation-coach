@@ -23,8 +23,8 @@ Labels are messy (`L162 (2026/10/22)`, several joined by `; `, `課前練習 L16
 
 ### Scoring and practice features
 - **Listen**: Google Translate TTS (normal / `慢速`) with a browser-voice fallback; **record & score**: Web Speech API (Chrome/Edge) with a coloured word diff and tips, or **Azure Pronunciation Assessment** (optional) for accuracy / fluency / completeness / prosody and per-phoneme results.
-- **Plain-language explanations (no IPA required)**: each wrong sound gets 少唸了 / 多唸了 / 唸成別的音, a whole-word respelling (`uh-FAW-duh-bul` vs `uh-FOR-duh-bul`), one mouth/tongue tip and two clickable minimal-pair words; “聽起來像 → 正確” speaks what you were heard saying, then the correct word.
-- **Hear yourself**: `播放我的錄音`, `重錄`; clicking your phoneme plays your whole word slowed (0.5x–1x, pitch kept) and highlights the wrong sound; `只聽這段（放慢）`; A/B compare (standard → pause → yours, loopable).
+- **Plain-language explanations (no IPA required)**: each wrong sound gets 少唸了 / 多唸了 / 唸成別的音, a whole-word respelling (`uh-FAW-duh-bul` vs `uh-FOR-duh-bul`), one mouth/tongue tip and two clickable minimal-pair words; “聽起來像 → 正確” uses Azure neural TTS (SSML `<phoneme alphabet="ipa">`, en-US-JennyNeural, slowed, cached in IndexedDB) to say the word the way you were heard, then correctly. Without an Azure key the respelling is shown as text only and the button plays a real-word minimal pair (e.g. day → they) and the correct word — letter respellings are never sent to TTS.
+- **Hear yourself**: `播放我的錄音`, `重錄`; clicking your phoneme plays your whole word slowed (0.5x–1x, pitch kept) and highlights the wrong sound; `只聽這段（放慢）`; A/B compare (standard → pause → yours, loopable). **我的** on a word card plays your whole word slowed (0.6x, pitch kept, 0.3 s padding) → the correct word slowed → the heard-as version, with a one-line Chinese hint for the main error (d/th, th/s, v/b, r/l, i/ee, a/e, dropped final consonant, added vowel) and a warning when Azure's phoneme confidence is low (possible recognizer artifact).
 - **Learn IPA gradually**: every IPA symbol has a tooltip card (注音 approximation, example words, mouth tip, what it is confused with). The 音標教學 panel lists all sounds (missed ones first) and has a 10-question quiz. Switch symbol chips in tables/explanations on or off there.
 - **Article import** (`加入文章`): paste text or drop `.txt`/`.md`, label it (e.g. `L045 2026/10/28 Job interview`), fix the split preview (edit / merge / delete), save. Stored in IndexedDB beside — never inside — your data file; exportable and deletable per lesson.
 - Keyboard in practice: `Space` record/stop, `N` next, `R` listen.
@@ -69,7 +69,7 @@ node --test "test/*.test.js"    # or: npm test   (Node 20+, no dependencies)
 Tests use synthetic data only; the private `data/items.json` is never read.
 
 ### Privacy
-No backend. Practice data, progress and keys stay in your browser. Audio goes to Google (Web Speech in Chrome) or Azure only when you record in that mode; TTS text goes to Google Translate.
+No backend. Practice data, progress and keys stay in your browser. Audio goes to Google (Web Speech in Chrome) or Azure only when you record in that mode; TTS text goes to Google Translate (or to Azure TTS for the heard-as / correct clips when a key is set).
 
 ### License
 MIT
@@ -93,8 +93,8 @@ MIT
 
 ### 評分與練習功能
 - **聽**：Google 翻譯語音（正常／`慢速`），失敗時改用瀏覽器語音；**錄音評分**：Web Speech（Chrome/Edge）逐字比對與建議，或選用 **Azure 發音評估**（準確度、流暢度、完整度、韻律與逐音素結果）。
-- **白話說明（不需要看懂音標）**：每個錯誤的音會標成 少唸了／多唸了／唸成別的音，附上整個字的拼法對照（`uh-FAW-duh-bul` vs `uh-FOR-duh-bul`）、一個嘴型／舌頭提示和兩組可點擊的對比字；「聽起來像 → 正確」會先唸出電腦聽到的版本再唸正確的字。
-- **聽自己**：`播放我的錄音`、`重錄`；點「你的」音素會慢速播放整個字（0.5x–1x，音高不變）並標出唸錯的音；`只聽這段（放慢）`；A/B 對照（標準 → 停一下 → 你的，可循環）。
+- **白話說明（不需要看懂音標）**：每個錯誤的音會標成 少唸了／多唸了／唸成別的音，附上整個字的拼法對照（`uh-FAW-duh-bul` vs `uh-FOR-duh-bul`）、一個嘴型／舌頭提示和兩組可點擊的對比字；「聽起來像 → 正確」用 Azure 語音（SSML 音標、en-US-JennyNeural、放慢，結果存在 IndexedDB）唸出電腦聽到的版本，再唸正確的字；沒有 Azure 金鑰時拼法只顯示文字，按鈕改唸一組真實的對比字（例如 day → they）和正確的字，不會把拼法丟給語音唸成字母。
+- **聽自己**：`播放我的錄音`、`重錄`；點「你的」音素會慢速播放整個字（0.5x–1x，音高不變）並標出唸錯的音；`只聽這段（放慢）`；A/B 對照（標準 → 停一下 → 你的，可循環）。單字卡的 **我的**：放慢播放你唸的整個字（0.6x、音高不變、前後留 0.3 秒）→ 正確發音（放慢）→ 電腦聽到的版本，並用一句話說明主要錯誤（d/th、th/s、v/b、r/l、i/ee、a/e、字尾子音吞掉、多加母音）；Azure 對音素信心低時會提醒可能是辨識誤差。
 - **慢慢學音標**：每個音標都有提示卡（注音近似、示範字、嘴型、容易跟哪個音搞混）；音標教學面板列出全部英文音（常錯的排最前面）並有 10 題小測驗；也可在面板中開關表格與說明旁的音標標籤。
 - **加入文章**：貼上文字或拖入 `.txt`／`.md`，填課程名稱（如 `L045 2026/10/28 Job interview`），在預覽修正拆句（改字、合併、刪除）後儲存。存在 IndexedDB，與練習資料分開；可匯出、可整課刪除。
 - 練習中的快捷鍵：`Space` 錄音／停止，`N` 下一題，`R` 聽示範。
@@ -123,7 +123,7 @@ node --test "test/*.test.js"    # 或 npm test（Node 20+，無需安裝套件�
 測試只用合成資料，不會讀取私人的 `data/items.json`。
 
 ### 隱私
-沒有後端伺服器。練習資料、進度、金鑰都只存在你的瀏覽器。只有在錄音時，音訊才會送到 Google（Chrome 語音辨識）或 Azure；朗讀文字會送到 Google 翻譯。
+沒有後端伺服器。練習資料、進度、金鑰都只存在你的瀏覽器。只有在錄音時，音訊才會送到 Google（Chrome 語音辨識）或 Azure；朗讀文字會送到 Google 翻譯（設定 Azure 金鑰時，「聽起來像／正確」的片段改送 Azure 語音）。
 
 ### 授權
 MIT

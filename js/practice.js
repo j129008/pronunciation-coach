@@ -7,7 +7,9 @@ import { ipaInfo, analyzeWord, ERR_ZH } from './phonemes.js';
 import { speak, stopSpeaking } from './tts.js';
 import { playSeg, stopSeg, activeIndex } from './playback.js';
 import { encodeWav, captureMic, assess } from './azure.js';
-import { explain, respell, plainSound, heardAs } from './explain.js';
+import { explain, respell, plainSound, heardAs, minimalPairs } from './explain.js';
+import { azureTtsReady, sayIpa, stopClip, targetIpa, heardIpa } from './azuretts.js';
+import { oneLineHint, lowConfidence, LOW_CONF_NOTE, mainError } from './hints.js';
 import { chip, ipaHtml, ipaRow, showIpaTable, handleIpaClick } from './ipaui.js';
 import { userLabel } from './lessons.js';
 
@@ -127,6 +129,7 @@ function cancelAll() {
   abTok++;
   stopSpeaking();
   stopSeg();
+  stopClip();
   $('abStop').hidden = true;
 }
 // standard (TTS of `text`) → short pause → your own slice, optionally looped
@@ -154,11 +157,19 @@ const abPhoneme = (wi, k) => { const w = azWords[wi], r = w && w.rows[k]; if (r 
 
 const explainHtml = (x, exp, heard) => !x ? '' : `<div class="vd"><b class="tl ${x.type}">${esc(x.typeLabel)}</b> ${esc(x.verdict)}</div>${ipaRow(exp, heard)}<div class="xp"><b>練習：</b>${esc(x.fix)}</div>` +
   (x.pairs.length ? '<div class="xp">對比字（點了會唸）：' + x.pairs.map(([a, b]) => `<span class="pw" data-say="${esc(a)}">${esc(a)}</span> / <span class="pw" data-say="${esc(b)}">${esc(b)}</span>`).join('　') + '</div>' : '');
+// Without an Azure key the heard-as version can't be synthesized (a letter respelling would be spelled out
+// letter by letter), so the button plays a real-word minimal pair, or just the correct word.
+const likePair = w => { const k = mainError(w.rows); return k < 0 ? null : minimalPairs(w.rows[k].exp, w.rows[k].heard)[0] || null; };
+const likeLabel = w => azureTtsReady() ? ['聽起來像 → 正確', '先用 Azure 語音唸出電腦聽到的版本，再唸正確的字']
+  : likePair(w) ? ['對比字 → 正確', '先唸一組對比字（你唸成的音 → 正確的音），再唸正確的字；設定 Azure 金鑰後可直接聽到你唸成的版本']
+  : ['正確發音', '唸正確的字；設定 Azure 金鑰後可聽到你唸成的版本'];
+const likeBtn = (w, wi) => { const [l, t] = likeLabel(w); return `<button class="btn sm" data-like="${wi}" title="${esc(t)}">${esc(l)}</button>`; };
 const spellHtml = (w, wi) => {
   const ha = heardAs(w.word, w.rows);
   if (!ha) return w.rows.some(r => r.bad) && w.et === 'Omission' ? '<div class="rsp">這個字沒有被唸出來</div>' : '';
-  return `<div class="rsp">${esc(ha.text)} <button class="btn sm" data-like="${wi}" title="先唸電腦聽到的版本，再唸正確的字">聽起來像 → 正確</button><br><small>拼法對照：<b class="rs bad">${esc(ha.saidCaps)}</b> vs <b class="rs">${esc(ha.target)}</b>（大寫＝出問題的音節）</small></div>`;
+  return `<div class="rsp">${esc(ha.text)} ${likeBtn(w, wi)}<br><small>拼法對照：<b class="rs bad">${esc(ha.saidCaps)}</b> vs <b class="rs">${esc(ha.target)}</b>（大寫＝出問題的音節，只是文字對照）</small></div>`;
 };
+const lowConfHtml = r => lowConfidence(r) ? `<div class="lowconf">⚠ ${esc(LOW_CONF_NOTE)}</div>` : '';
 // highlight the sound being played (one phoneme if `only` is given, otherwise any mispronounced one)
 let hlKey = null;
 function setHl(wi, k) {
@@ -169,13 +180,55 @@ function setHl(wi, k) {
   if (key) document.querySelectorAll(`[data-pe="${key}"],[data-ph="${key}"]`).forEach(x => x.classList.add('playing'));
 }
 const tickFor = (wi, w, only = null) => t => setHl(wi, activeIndex(w.rows, t, only));
-function likeAudio(wi) {
-  const w = azWords[wi], ha = w && heardAs(w.word, w.rows);
-  if (!ha) return;
+// correct word, slowed: Azure (expected phonemes) when configured, otherwise the normal TTS
+async function sayCorrect(w, tok) {
+  if (azureTtsReady() && await sayIpa(w.word, targetIpa(w.rows))) return;
+  if (tok === abTok) await speakP(w.word, stdRate());
+}
+// what the recognizer heard. Returns false when there is nothing to play (no key and no minimal pair).
+async function sayHeard(w, tok) {
+  if (azureTtsReady()) {
+    const ipa = heardIpa(w.rows);
+    if (ipa && ipa !== targetIpa(w.rows) && await sayIpa(w.word, ipa)) return true;
+    if (tok !== abTok) return false;
+  }
+  const pr = likePair(w);
+  if (!pr) return false;
+  await speakP(pr[1], stdRate()); // real word containing the sound you made…
+  if (tok !== abTok) return false;
+  await sleep(300);
+  if (tok === abTok) await speakP(pr[0], stdRate()); // …and its partner with the right sound
+  return true;
+}
+async function likeAudio(wi) {
+  const w = azWords[wi];
+  if (!w) return;
   $('myAudio').pause();
   cancelAll();
-  const rate = stdRate();
-  speak(ha.said, rate, () => speak(w.word, rate));
+  const tok = abTok;
+  if (await sayHeard(w, tok)) { if (tok !== abTok) return; await sleep(400); }
+  if (tok === abTok) await sayCorrect(w, tok);
+}
+// 我的: your whole word slowed (pitch kept, 0.3 s padding) → correct word slowed → heard-as version,
+// with a one-line hint for the main error.
+async function mineSequence(wi) {
+  const w = azWords[wi];
+  if (!w || !lastCap) return;
+  const k = mainError(w.rows), r = w.rows[k];
+  const box = document.getElementById('phint' + wi);
+  if (box) box.innerHTML = r ? `<div class="hint1">💡 ${esc(oneLineHint(r.exp, r.heard, { isFinal: r.isFinal, word: w.word, letters: r.let }))}</div>${lowConfHtml(r)}<small class="muted">播放：你的（放慢）→ 正確（放慢）${heardAs(w.word, w.rows) && (azureTtsReady() || likePair(w)) ? ' → 聽起來像' : ''}</small>` : '<small class="muted">播放：你的（放慢）→ 正確（放慢）</small>';
+  $('myAudio').pause();
+  cancelAll();
+  const tok = abTok;
+  $('abStop').hidden = false;
+  await playSeg(lastCap, w.offset, w.dur, { pad: 0.3, rate: 0.6, onTick: tickFor(wi, w) });
+  if (tok !== abTok) return;
+  await sleep(400);
+  if (tok !== abTok) return;
+  await sayCorrect(w, tok);
+  if (tok !== abTok) return;
+  if (r && heardAs(w.word, w.rows)) { await sleep(400); if (tok !== abTok) return; await sayHeard(w, tok); }
+  if (tok === abTok) $('abStop').hidden = true;
 }
 function playOwnSegment(wi, k) {
   const w = azWords[wi], r = w && w.rows[k];
@@ -184,7 +237,7 @@ function playOwnSegment(wi, k) {
   playSeg(lastCap, r.off, r.dur, { pad: 0.25, rate: 0.5, onTick: tickFor(wi, w, k) });
 }
 const segButtons = (wi, k, w) => (lastCap && w.et !== 'Omission')
-  ? `<div class="xp"><button class="btn sm" data-seg="${wi},${k}">只聽這段（放慢）</button> ${heardAs(w.word, w.rows) ? `<button class="btn sm" data-like="${wi}">聽起來像 → 正確</button>` : ''}</div>` : '';
+  ? `<div class="xp"><button class="btn sm" data-seg="${wi},${k}">只聽這段（放慢）</button> ${heardAs(w.word, w.rows) ? likeBtn(w, wi) : ''}</div>` : '';
 // table cell: IPA symbol chip (tooltip) + letters respelling; chip is optional (setting 表格顯示音標)
 const cellHtml = ph => (ph === '—' ? '—' : showIpaTable() ? `${chip(ph, { big: true })}<br><small>${esc(respell([ph]))}</small>` : esc(respell([ph])));
 
@@ -347,7 +400,7 @@ function renderAzure(j) {
   if (top.length) h += '<div class="issues"><ol>' + top.map(x => {
     const sp = spShown.has(x.wi) ? '' : spellHtml(words[x.wi], x.wi);
     spShown.add(x.wi);
-    return `<li><b>${esc(x.w)}</b>${sp}${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w, letters: x.r.let }), x.r.exp, x.r.heard)}
+    return `<li><b>${esc(x.w)}</b>${sp}${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w, letters: x.r.let }), x.r.exp, x.r.heard)}${lowConfHtml(x.r)}
  ${lastCap && words[x.wi].et !== 'Omission' ? `<button class="btn sm" data-abp="${x.wi},${x.ki}">A/B：標準 → 我的</button><button class="btn sm" data-seg="${x.wi},${x.ki}">只聽這段（放慢）</button>` : ''}</li>`;
   }).join('') + '</ol></div>';
   else h += '<div class="issues ok">沒有明顯的錯誤音素。</div>';
@@ -364,7 +417,7 @@ function renderAzure(j) {
   <tr><th>分數</th>${w.rows.map(r => `<td><small>${f(r.score)}</small></td>`).join('')}</tr>
   ${canPlay ? `<tr><th>A/B</th>${w.rows.map((r, k) => `<td><button class="btn sm" data-abp="${i},${k}" title="標準單字 → 你的這個音">A/B</button></td>`).join('')}</tr>` : ''}</table><div class="phint" id="phint${i}"></div></div>`;
   }).join('') + '</div>';
-  $('azCards').innerHTML = h + '<p class="muted">點「標準」格：聽這個音的示範字；點「你的」格：播放你唸的整個字，並標出唸錯的音。點單字卡其他地方：先播標準發音再播你自己的那段錄音。A/B：先聽標準單字，停一下，再聽你的那一段（可勾選循環）。紅色＝不準的音素；「你的」格是 Azure 判斷最像的音。</p>';
+  $('azCards').innerHTML = h + '<p class="muted">點「標準」格：聽這個音的示範字；點「你的」格：播放你唸的整個字，並標出唸錯的音。「我的」：放慢播你唸的整個字 → 正確發音（放慢）→ 電腦聽到的版本，並用一句話說明錯在哪。點單字卡其他地方：先播標準發音再播你自己的那段錄音。A/B：先聽標準單字，停一下，再聽你的那一段（可勾選循環）。紅色＝不準的音素；「你的」格是 Azure 判斷最像的音。</p>';
   $('abTools').hidden = false;
   $('secCards').hidden = false;
   $('secIpa').hidden = !top.length;
@@ -403,7 +456,7 @@ function onAzureClick(e) {
     } else {
       const ex = r.bad ? explain(r.exp, r.heard, { isFinal: r.isFinal, word: w.word, letters: r.let }) : null;
       let m = ex ? '<b>你的這個音</b>' : `<b>這個音唸得不錯</b>：${esc(plainSound(r.exp))}`;
-      m += explainHtml(ex, r.exp, r.heard);
+      m += explainHtml(ex, r.exp, r.heard) + lowConfHtml(r);
       if (!lastCap || r.off == null || w.et === 'Omission') m += '<br><small>（沒有錄音或時間資料可播）</small>';
       else {
         // whole word (slowed, padded) so there is enough audio to hear; the wrong sound lights up while it plays
@@ -417,7 +470,7 @@ function onAzureClick(e) {
     return;
   }
   if (std) { speak(W[+std.dataset.std].word, stdRate()); return; }
-  if (mine) { const wi = +mine.dataset.mine, w = W[wi]; cancelAll(); playSeg(lastCap, w.offset, w.dur, { rate: segRate(), onTick: tickFor(wi, w) }); return; }
+  if (mine) { mineSequence(+mine.dataset.mine); return; }
   if (ab) { speak(cur.e, stdRate(), playMine); return; }
   if (card) {
     const i = [...card.parentNode.children].indexOf(card);

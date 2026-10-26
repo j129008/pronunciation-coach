@@ -32,6 +32,8 @@ test('analyzeWord extracts offsets and flags bad phonemes', () => {
   assert.equal(w.rows[1].bad, false);
   assert.equal(w.rows[0].off, 1000000);
   assert.equal(w.rows[1].isFinal, true);
+  assert.deepEqual([w.rows[0].heardConf, w.rows[0].expConf], [70, 20]);
+  assert.deepEqual([w.rows[1].heardConf, w.rows[1].expConf], [95, 95]);
   assert.match(phTip('θ', 's', false, 'think'), /θ/);
 });
 
