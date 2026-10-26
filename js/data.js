@@ -56,13 +56,26 @@ export function lessonOf(d) {
 }
 
 // Adds lesson `L` and sort position `o_`; returns the lookup structures the UI needs.
+// User-added lessons (d.u) come first, newest lesson on top; `pinned` is the newest one's label (課前練習).
 export function prepareItems(DATA) {
-  DATA.forEach(d => { d.L = lessonOf(d); });
-  const ORDERED = DATA.slice().sort((a, b) => (a.L === '其他') - (b.L === '其他') || a.L.localeCompare(b.L) || a.i - b.i);
+  DATA.forEach(d => { d.L = d.u ? d.l : lessonOf(d); });
+  const added = new Map();
+  for (const d of DATA) if (d.u) added.set(d.L, Math.max(added.get(d.L) || 0, d.added || 0));
+  const ORDERED = DATA.slice().sort((a, b) => (!!b.u - !!a.u) ||
+    (a.u && b.u ? (added.get(b.L) - added.get(a.L)) || a.L.localeCompare(b.L) || a.i - b.i
+      : (a.L === '其他') - (b.L === '其他') || a.L.localeCompare(b.L) || a.i - b.i));
   ORDERED.forEach((d, k) => { d.o_ = k; });
   const byId = new Map(DATA.map(d => [d.i, d]));
-  return { DATA, ORDERED, byId };
+  const pinned = ORDERED.length && ORDERED[0].u ? ORDERED[0].L : null;
+  return { DATA, ORDERED, byId, pinned };
 }
+
+// user-added items (separate IndexedDB key, so they survive reloads and data-file changes)
+export const USER_KEY = 'userItems';
+export async function loadUserItems(store = IDB) {
+  try { const v = await store.get(USER_KEY); return Array.isArray(v) ? v.filter(d => d && typeof d.e === 'string' && d.u) : []; } catch (e) { return []; }
+}
+export const saveUserItems = (items, store = IDB) => store.set(USER_KEY, items);
 
 // Order: data/items.json → items saved in IndexedDB → `pick()` (UI prompt, resolves {items, save}).
 export async function loadData({ fetchFn = (...a) => fetch(...a), store = IDB, pick } = {}) {

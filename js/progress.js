@@ -105,6 +105,26 @@ let pickN = 0;
 const seenS = new Set();
 export const markSeen = id => seenS.add(id);
 
+// removes progress for deleted items
+export function forgetItems(ids) {
+  const wi = getWeakItems();
+  for (const id of ids) { delete PROG[id]; delete wi[id]; }
+  saveProg();
+  localStorage.weakItems = JSON.stringify(wi);
+}
+
+// prefer the pinned (課前練習) lesson while it still has something to practise, else the whole pool
+export function smartPickPinned(pool, pinned, now, lastId, prog = PROG) {
+  if (pinned) {
+    const pp = pool.filter(d => d.u && d.L === pinned);
+    if (pp.length) {
+      const r = smartPick(pp, now, lastId, prog);
+      if (r && !r.fallback) return { ...r, why: '📝 課前練習｜' + r.why };
+    }
+  }
+  return smartPick(pool, now, lastId, prog);
+}
+
 export function smartPick(pool, now, lastId, prog = PROG) {
   now = now || Date.now();
   const recent = 10 * 60 * 1000;
@@ -135,7 +155,7 @@ export function smartPick(pool, now, lastId, prog = PROG) {
   if (!d && seenS.size) { seenS.clear(); return smartPick(pool, now, lastId, prog); }
   if (!d) {
     const all = pool.filter(x => x.i !== lastId && prog[x.i]).sort((a, b) => prog[a.i].d - prog[b.i].d);
-    if (all[0]) return { d: all[0], why: '🔄 都練得不錯！複習最久沒練的' };
+    if (all[0]) return { d: all[0], why: '🔄 都練得不錯！複習最久沒練的', fallback: true };
     return null;
   }
   return { d, why: why(d) };
