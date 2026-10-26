@@ -36,7 +36,7 @@
 <div class="card">
 <details><summary>🗣️ 我的常錯音（Azure 音素統計）</summary><div id="confList"></div><button id="clearConf" class="sec">清除</button></details>
 <details><summary>📋 弱點字紀錄</summary><div id="weakList"></div><button id="clearWeak" class="sec">清除紀錄</button></details>
-<details><summary>💾 備份 / 還原進度</summary><button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" onclick="forgetData()">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
+<details><summary>💾 備份 / 還原進度</summary><button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" id="forgetBtn">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
 <details><summary>⚙️ 進階：Azure 發音評估（音素級分數）</summary>
 <p><small>輸入 Azure Speech 金鑰與區域（如 eastasia）。只存在本機 localStorage。</small></p>
 Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" size="10">
@@ -50,4 +50,4 @@ Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" siz
 <p><button id="loadSample">試用範例資料 Try sample data</button></p>
 <p><small>格式 Format：<code>[{"e":"English text","t":"sentence|vocab|extra","z":"中文","x":"example","p":"IPA","l":"L001"}]</code>，詳見 README。</small></p>
 <p id="loadErr" style="color:#b91c1c"></p></div></div>
-<script src="app.js"></script></body></html>
+<script type="module" src="app.js"></script></body></html>
