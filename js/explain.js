@@ -88,6 +88,7 @@ const SN = {
 };
 export const soundLabel = ph => (SN[ipaNorm(ph)] || [ipaNorm(ph)])[0];
 const zh = ph => (SN[ipaNorm(ph)] || ['', ''])[1];
+export const zhApprox = zh;
 
 // ---- articulation notes (mouth / tongue / voicing) ----
 export const ART = {
@@ -113,6 +114,8 @@ export const ART = {
   'ɔɹ': ['「ㄛ」之後舌頭馬上往後捲起、懸空不碰上顎', 1], 'ɑɹ': ['「ㄚ」之後舌頭馬上往後捲起、懸空不碰上顎', 1],
   'ɛɹ': ['「ㄝ」之後舌頭馬上往後捲起、懸空不碰上顎', 1], 'ɪɹ': ['「ㄧ」之後舌頭馬上往後捲起、懸空不碰上顎', 1], 'ʊɹ': ['「ㄨ」之後舌頭馬上往後捲起、懸空不碰上顎', 1],
 };
+// mouth/tongue note for one sound (no voicing suffix, no IPA)
+export const artNote = p => (ART[ipaNorm(p)] || [''])[0];
 const art = p => { const a = ART[ipaNorm(p)]; return a ? a[0] + (a[1] ? '，喉嚨震動' : '，喉嚨不震動') : ''; };
 
 // ---- minimal pairs: first word has the first sound, second word the second ----
