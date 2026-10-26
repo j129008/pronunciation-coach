@@ -5,9 +5,9 @@ import * as P from './progress.js';
 import { scoreHyp, tipsFor } from './align.js';
 import { ipaInfo, analyzeWord, ERR_ZH } from './phonemes.js';
 import { fillVoices, speak, stopSpeaking } from './tts.js';
-import { playSeg, stopSeg } from './playback.js';
+import { playSeg, stopSeg, activeIndex } from './playback.js';
 import { encodeWav, captureMic, assess } from './azure.js';
-import { explain, respell, respellWord, plainSound } from './explain.js';
+import { explain, respell, plainSound, heardAs } from './explain.js';
 
 const TL = { sentence: '句子', vocab: '單字', extra: '補充' };
 const ST = { new: ['未練', '#b0b4bd'], weak: ['要加強', '#e5484d'], fair: ['還不錯', '#f5a524'], good: ['已熟練', '#30a46c'], due: ['待複習', '#7c5cff'] };
@@ -271,10 +271,37 @@ const abPhoneme = (wi, k) => { const w = azWords[wi], r = w && w.rows[k]; if (r 
 
 const explainHtml = x => !x ? '' : `<div class="vd"><b class="tl ${x.type}">${esc(x.typeLabel)}</b> ${esc(x.verdict)}</div><div class="xp">🛠 ${esc(x.fix)}</div>` +
   (x.pairs.length ? '<div class="xp">對比字（點了會唸）：' + x.pairs.map(([a, b]) => `<span class="pw" data-say="${esc(a)}">${esc(a)}</span> / <span class="pw" data-say="${esc(b)}">${esc(b)}</span>`).join('　') + '</div>' : '');
-const spellHtml = w => {
-  const sp = respellWord(w.rows);
-  return !sp.differs ? '' : `<div class="rsp">整個字聽起來像 <b class="rs bad">${esc(sp.said) || '（沒唸出來）'}</b>　正確是 <b class="rs">${esc(sp.target)}</b> <small>（大寫＝出問題的音節）</small></div>`;
+const spellHtml = (w, wi) => {
+  const ha = heardAs(w.word, w.rows);
+  if (!ha) return w.rows.some(r => r.bad) && w.et === 'Omission' ? '<div class="rsp">這個字沒有被唸出來</div>' : '';
+  return `<div class="rsp">${esc(ha.text)} <button class="sm" data-like="${wi}" title="先唸電腦聽到的版本，再唸正確的字">🔈 聽起來像 → 正確</button><br><small>拼法對照：<b class="rs bad">${esc(ha.saidCaps)}</b> vs <b class="rs">${esc(ha.target)}</b>（大寫＝出問題的音節）</small></div>`;
 };
+// highlight the sound being played (one phoneme if `only` is given, otherwise any mispronounced one)
+let hlKey = null;
+function setHl(wi, k) {
+  const key = k >= 0 ? wi + ',' + k : null;
+  if (key === hlKey) return;
+  hlKey = key;
+  document.querySelectorAll('.phc.playing').forEach(x => x.classList.remove('playing'));
+  if (key) document.querySelectorAll(`[data-pe="${key}"],[data-ph="${key}"]`).forEach(x => x.classList.add('playing'));
+}
+const tickFor = (wi, w, only = null) => t => setHl(wi, activeIndex(w.rows, t, only));
+function likeAudio(wi) {
+  const w = azWords[wi], ha = w && heardAs(w.word, w.rows);
+  if (!ha) return;
+  $('myAudio').pause();
+  cancelAll();
+  const rate = stdRate();
+  speak(ha.said, rate, () => speak(w.word, rate));
+}
+function playOwnSegment(wi, k) {
+  const w = azWords[wi], r = w && w.rows[k];
+  if (!r || !lastCap || w.et === 'Omission') return;
+  cancelAll();
+  playSeg(lastCap, r.off, r.dur, { pad: 0.25, rate: 0.5, onTick: tickFor(wi, w, k) });
+}
+const segButtons = (wi, k, w) => (lastCap && w.et !== 'Omission')
+  ? `<div class="xp"><button class="sm" data-seg="${wi},${k}">🔍 只聽這段（放慢）</button> ${heardAs(w.word, w.rows) ? `<button class="sm" data-like="${wi}">🔈 聽起來像 → 正確</button>` : ''}</div>` : '';
 const cellText = (ph, bad) => (ph === '—' ? '—' : respell([ph]));
 
 function playMine() {
@@ -431,10 +458,10 @@ function renderAzure(j) {
  <div style="margin:6px 0"><button id="abAll">🔁 整句 A/B（標準 → 我的）</button></div>`;
   const spShown = new Set();
   if (top.length) h += '<div class="issues"><b>🎯 你這句最需要改的音</b><ol>' + top.map(x => {
-    const sp = spShown.has(x.wi) ? '' : spellHtml(words[x.wi]);
+    const sp = spShown.has(x.wi) ? '' : spellHtml(words[x.wi], x.wi);
     spShown.add(x.wi);
     return `<li><b>${esc(x.w)}</b>${sp}${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w, letters: x.r.let }))}
- ${lastCap && words[x.wi].et !== 'Omission' ? `<button class="sm" data-abp="${x.wi},${x.ki}">⇄ A/B：標準 → 我的</button>` : ''}</li>`;
+ ${lastCap && words[x.wi].et !== 'Omission' ? `<button class="sm" data-abp="${x.wi},${x.ki}">⇄ A/B：標準 → 我的</button><button class="sm" data-seg="${x.wi},${x.ki}">🔍 只聽這段（放慢）</button>` : ''}</li>`;
   }).join('') + '</ol></div>';
   else h += '<div class="issues">🎉 沒有明顯的錯誤音素！</div>';
   h += '<div class="cards">' + words.map((w, i) => {
@@ -442,7 +469,7 @@ function renderAzure(j) {
     const canPlay = w.et !== 'Omission' && lastCap;
     return `<div class="wcard ${cls}"><div><b style="font-size:18px">${esc(w.word)}</b> <small>${f(w.score)}分 ${ERR_ZH[w.et] ? '・' + ERR_ZH[w.et] : ''}</small>
   <button class="sm" data-std="${i}">🔊 標準</button>${canPlay ? `<button class="sm" data-mine="${i}">🎤 我的</button><button class="sm" data-abw="${i}">⇄ A/B</button>` : ''}</div>
-  ${spellHtml(w)}
+  ${spellHtml(w, i)}
   <table class="cmp"><tr><th>字母</th>${w.rows.map(r => `<td class="lt">${esc(r.let || '')}</td>`).join('')}</tr>
   <tr><th>標準<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'pe' : ''}" data-pe="${i},${k}" title="${esc(plainSound(r.exp))}">${esc(cellText(r.exp))}</td>`).join('')}</tr>
   <tr><th>你的<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'ph-bad' : 'ph-ok'}" data-ph="${i},${k}" title="${esc(r.bad && r.heard !== '—' ? '你唸成 ' + plainSound(r.heard) : '點我聽你自己這個音')}">${esc(cellText(r.bad ? r.heard : r.exp))}</td>`).join('')}</tr>
@@ -460,6 +487,9 @@ function onAzureClick(e) {
   if (!t.closest) return;
   const std = t.closest('[data-std]'), mine = t.closest('[data-mine]'), card = t.closest('.wcard'), ab = t.closest('#abAll');
   const W = azWords;
+  const seg = t.closest('[data-seg]'), like = t.closest('[data-like]');
+  if (seg) { const [wi, k] = seg.dataset.seg.split(',').map(Number); playOwnSegment(wi, k); return; }
+  if (like) { likeAudio(+like.dataset.like); return; }
   const abp = t.closest('[data-abp]'), abw = t.closest('[data-abw]'), say = t.closest('[data-say]');
   if (abp) { const [wi, k] = abp.dataset.abp.split(',').map(Number); abPhoneme(wi, k); return; }
   if (abw) { abWord(+abw.dataset.abw); return; }
@@ -481,19 +511,25 @@ function onAzureClick(e) {
       let m = ex ? '🎤 你的這個音' : `🎤 這個音唸得不錯：${esc(plainSound(r.exp))}`;
       m += explainHtml(ex);
       if (!lastCap || r.off == null || w.et === 'Omission') m += '<br><small>（沒有錄音或時間資料可播）</small>';
-      else { cancelAll(); playSeg(lastCap, r.off, r.dur, { rate: segRate() }); }
+      else {
+        // whole word (slowed, padded) so there is enough audio to hear; the wrong sound lights up while it plays
+        cancelAll();
+        const whole = Number.isFinite(w.offset) && Number.isFinite(w.dur);
+        playSeg(lastCap, whole ? w.offset : r.off, whole ? w.dur : r.dur, { rate: segRate(), onTick: tickFor(wi, w, k) });
+        m += segButtons(wi, k, w);
+      }
       if (box) box.innerHTML = m;
     }
     return;
   }
   if (std) { speak(W[+std.dataset.std].word, stdRate()); return; }
-  if (mine) { const w = W[+mine.dataset.mine]; cancelAll(); playSeg(lastCap, w.offset, w.dur, { rate: segRate() }); return; }
+  if (mine) { const wi = +mine.dataset.mine, w = W[wi]; cancelAll(); playSeg(lastCap, w.offset, w.dur, { rate: segRate(), onTick: tickFor(wi, w) }); return; }
   if (ab) { speak(cur.e, stdRate(), playMine); return; }
   if (card) {
     const i = [...card.parentNode.children].indexOf(card);
     const w = W[i];
     if (!w) return;
-    speak(w.word, stdRate(), () => { if (w.et !== 'Omission') playSeg(lastCap, w.offset, w.dur, { rate: segRate() }); });
+    speak(w.word, stdRate(), () => { if (w.et !== 'Omission') playSeg(lastCap, w.offset, w.dur, { rate: segRate(), onTick: tickFor(i, w) }); });
   }
 }
 
