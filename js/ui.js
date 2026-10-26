@@ -4,8 +4,8 @@ import { IDB, validItems, prepareItems } from './data.js';
 import * as P from './progress.js';
 import { scoreHyp, tipsFor } from './align.js';
 import { phTip, ipaInfo, ipaHint, analyzeWord, ERR_ZH } from './phonemes.js';
-import { fillVoices, speak, speakThen, player } from './tts.js';
-import { playSeg } from './playback.js';
+import { fillVoices, speak, stopSpeaking } from './tts.js';
+import { playSeg, stopSeg } from './playback.js';
 import { encodeWav, captureMic, assess } from './azure.js';
 
 const TL = { sentence: '句子', vocab: '單字', extra: '補充' };
@@ -136,7 +136,9 @@ function show(d, reason) {
   $('result').style.display = 'none';
   $('summary').style.display = 'none';
   $('interim').textContent = '';
-  $('myAudio').style.display = 'none';
+  clearMine();
+  lastCap = null;
+  azWords = [];
   $('status').innerHTML = '';
   location.hash = d.i;
   scrollToCur();
@@ -204,6 +206,45 @@ function showResult(best, alts) {
 
 // ---- recording (default: Web Speech) ----
 function status(s) { $('status').innerHTML = '<small>' + s + '</small>'; }
+
+// ---- the user's last recording (full-take playback + re-record) ----
+let myUrl = null;
+function setMyAudio(blob) {
+  if (myUrl) URL.revokeObjectURL(myUrl);
+  myUrl = URL.createObjectURL(blob);
+  const a = $('myAudio');
+  a.src = myUrl;
+  a.style.display = 'block';
+  $('playMine').hidden = false;
+  $('reRec').hidden = false;
+}
+function clearMine() {
+  const a = $('myAudio');
+  a.pause();
+  a.removeAttribute('src');
+  a.load();
+  a.style.display = 'none';
+  if (myUrl) URL.revokeObjectURL(myUrl);
+  myUrl = null;
+  stopSeg();
+  $('playMine').hidden = true;
+  $('reRec').hidden = true;
+}
+function playMine() {
+  const a = $('myAudio');
+  if (!myUrl) return;
+  stopSpeaking();
+  stopSeg();
+  a.currentTime = 0;
+  a.play().catch(() => {});
+}
+function toggleMine() {
+  const a = $('myAudio');
+  if (!a.paused) { a.pause(); a.currentTime = 0; } else playMine();
+}
+function syncRecButtons() { $('playMine').disabled = $('reRec').disabled = busy; }
+// silence everything that could bleed into the mic before a new take
+function prepareToRecord() { stopSpeaking(); stopSeg(); $('myAudio').pause(); }
 const useAzure = () => $('azOn').checked && !!localStorage.azKey && !!localStorage.azRegion;
 function updBadge() {
   const b = $('modeBadge');
@@ -216,24 +257,24 @@ async function startAudio() {
     chunks = [];
     mr.ondataavailable = e => chunks.push(e.data);
     mr.onstop = () => {
-      const b = new Blob(chunks, { type: mr.mimeType });
-      const a = $('myAudio');
-      a.src = URL.createObjectURL(b);
-      a.style.display = 'block';
+      setMyAudio(new Blob(chunks, { type: mr.mimeType }));
       stream.getTracks().forEach(t => t.stop());
     };
     mr.start();
-  } catch (e) { status('無法使用麥克風：' + e.message); }
+  } catch (e) { status('無法使用麥克風：' + esc(e.message)); }
 }
 function stopAudio() { if (mr && mr.state !== 'inactive') mr.stop(); }
 
 async function defaultRecognize() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return alert('此瀏覽器不支援語音辨識，請使用 Chrome 或 Edge。');
+  const item = cur;
+  prepareToRecord();
   recog = new SR();
   recog.lang = 'en-US'; recog.interimResults = true; recog.maxAlternatives = 5; recog.continuous = false;
   const finals = [];
   busy = true;
+  syncRecButtons();
   $('rec').textContent = '■ 停止';
   status('🎙️ 請開始唸…');
   await startAudio();
@@ -248,9 +289,11 @@ async function defaultRecognize() {
   recog.onerror = e => status('辨識錯誤：' + e.error + (e.error === 'not-allowed' ? '（請允許麥克風；file:// 可能被擋，請改用 localhost）' : e.error === 'network' ? '（需連網，Chrome 語音辨識走 Google 伺服器）' : ''));
   recog.onend = () => {
     busy = false;
+    syncRecButtons();
     $('rec').textContent = '● 錄音並評分';
     stopAudio();
     $('interim').textContent = '';
+    if (cur !== item) { clearMine(); return; } // user moved on: don't score the wrong item
     if (!finals.length) { status('沒有聽到聲音，請再試一次。'); return; }
     const tops = finals.map(f => f[0]);
     const set = new Set([tops.join(' ')]);
@@ -267,33 +310,37 @@ async function defaultRecognize() {
 }
 
 // ---- recording (Azure) ----
-function azReset() { busy = false; $('rec').textContent = '● 錄音並評分'; }
+function azReset() { busy = false; syncRecButtons(); $('rec').textContent = '● 錄音並評分'; }
 async function azureAssess() {
   if (azRec) { azRec.stop(); return; }
+  const item = cur;
+  prepareToRecord();
   let cap;
-  try { cap = await captureMic({ maxMs: 30000 }); } catch (e) { status('無法使用麥克風：' + e.message); return; }
+  try { cap = await captureMic({ maxMs: 30000 }); } catch (e) { status('無法使用麥克風：' + esc(e.message)); return; }
   azRec = cap;
   busy = true;
+  syncRecButtons();
   $('rec').textContent = '■ 停止並評分';
   status('🎙️ Azure 模式：請唸出整句，唸完按「停止並評分」（最長 30 秒）');
   const { data, rate, peak } = await cap.done;
   azRec = null;
   azReset();
+  if (cur !== item) return; // user moved on: don't score the wrong item
   lastCap = { data, rate };
   const wav = encodeWav(data, rate);
-  const a = $('myAudio');
-  a.src = URL.createObjectURL(wav);
-  a.style.display = 'block';
+  setMyAudio(wav);
   if (peak < 0.01) {
     status(`⚠️ 麥克風幾乎沒有聲音（峰值 ${peak.toFixed(4)}）。請到 Chrome 網址列左側 🔒 / chrome://settings/content/microphone 確認選到正確的麥克風，並檢查 macOS 系統設定 → 隱私權 → 麥克風。`);
     return;
   }
   status(`上傳到 Azure 評分中…（${(data.length / rate).toFixed(1)} 秒）`);
   try {
-    const res = await assess(wav, cur.e, { key: localStorage.azKey, region: localStorage.azRegion });
+    const res = await assess(wav, item.e, { key: localStorage.azKey, region: localStorage.azRegion });
+    if (cur !== item) return;
     if (!res.ok) { status(esc(res.message)); return; }
     renderAzure(res.json);
   } catch (e) {
+    if (cur !== item) return;
     status('Azure 錯誤：' + esc(e.message) + ' → 改用預設模式，請再唸一次');
     defaultRecognize();
   }
@@ -366,26 +413,26 @@ function onAzureClick(e) {
     if (pe) {
       const x = ipaInfo(r.exp);
       if (box) box.innerHTML = `🔊 <b>${esc(r.let || '')}</b> → ${esc(ipaHint(r.exp))}` + (x ? `　<small>示範字：<b>${esc(x.w)}</b>，接著唸 ${esc(w.word)}</small>` : '');
-      if (x) speakThen(x.w, 0.7, () => speak(w.word, 0.7)); else speak(w.word, 0.7);
+      if (x) speak(x.w, 0.7, () => speak(w.word, 0.7)); else speak(w.word, 0.7);
     } else {
       let m = '🎤 你的這個音';
       if (r.heard === '—') m = '⚠️ 這個音你沒唸出來（漏音）';
       else if (r.heard !== r.exp) m += `：你唸成 ${esc(ipaHint(r.heard))}<br>✅ 應該是 ${esc(ipaHint(r.exp))}`;
       else m += `：${esc(ipaHint(r.exp))}`;
       if (!lastCap || r.off == null || w.et === 'Omission') m += '<br><small>（沒有錄音或時間資料可播）</small>';
-      else playSeg(lastCap, r.off / 1e7, (r.off + r.dur) / 1e7, 0.06);
+      else playSeg(lastCap, r.off, r.dur, 0.06);
       if (box) box.innerHTML = m;
     }
     return;
   }
   if (std) { speak(W[+std.dataset.std].word, 0.7); return; }
-  if (mine) { const w = W[+mine.dataset.mine]; playSeg(lastCap, w.offset / 1e7, (w.offset + w.dur) / 1e7); return; }
-  if (ab) { speakThen(cur.e, 1, () => { const a = $('myAudio'); a.currentTime = 0; a.play(); }); return; }
+  if (mine) { const w = W[+mine.dataset.mine]; playSeg(lastCap, w.offset, w.dur); return; }
+  if (ab) { speak(cur.e, 1, playMine); return; }
   if (card) {
     const i = [...card.parentNode.children].indexOf(card);
     const w = W[i];
     if (!w) return;
-    speakThen(w.word, 0.7, () => { if (w.et !== 'Omission') playSeg(lastCap, w.offset / 1e7, (w.offset + w.dur) / 1e7); });
+    speak(w.word, 0.7, () => { if (w.et !== 'Omission') playSeg(lastCap, w.offset, w.dur); });
   }
 }
 
@@ -403,6 +450,8 @@ export function startApp(items) {
     defaultRecognize();
   };
   $('listen').onclick = () => cur && say(cur.e);
+  $('playMine').onclick = toggleMine;
+  $('reRec').onclick = () => $('rec').click();
   $('weakList').onclick = e => { const s = e.target.closest('[data-w]'); if (s) speak(s.dataset.w, 0.7); };
   $('words').onclick = e => { const s = e.target.closest('[data-w]'); if (s) speak(s.dataset.w, 0.7); };
   $('clearWeak').onclick = () => { if (confirm('清除所有弱點紀錄？')) { P.clearWeak(); renderWeak(); } };
@@ -465,6 +514,10 @@ export function startApp(items) {
   $('next').onclick = () => step(1);
   $('smart').onclick = next;
   $('menuBtn').onclick = () => document.body.classList.toggle('side-open');
+  // tap outside the drawer closes it on small screens
+  document.addEventListener('click', e => {
+    if (innerWidth < 900 && document.body.classList.contains('side-open') && !e.target.closest('aside,#menuBtn,#stats')) document.body.classList.remove('side-open');
+  });
   document.addEventListener('keydown', e => {
     if (e.target.matches && e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Space') { e.preventDefault(); $('rec').click(); }
