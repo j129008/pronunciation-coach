@@ -27,7 +27,7 @@ function ttsChunks(text) {
   return out;
 }
 
-function sysSpeak(text, rate) {
+function sysSpeak(text, rate, done) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   const name = localStorage.voice;
@@ -35,38 +35,46 @@ function sysSpeak(text, rate) {
   if (!v) v = englishVoices()[0];
   if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
   u.rate = rate;
+  u.onend = done;
+  u.onerror = done;
   speechSynthesis.speak(u);
 }
 
-export function speak(text, rate) {
+// Speaks `text`. `onDone` runs once when playback ends or fails (never if superseded by a newer speak()),
+// so chained playback (example word → word → your recording) also works when Google TTS falls back to system voices.
+export function speak(text, rate, onDone) {
   rate = rate || 1;
   speechSynthesis.cancel();
   player.pause();
-  if ((localStorage.voice || 'google') !== 'google') return sysSpeak(text, rate);
   const gen = ++ttsGen;
+  let finished = false;
+  const done = () => {
+    if (finished || gen !== ttsGen) return;
+    finished = true;
+    if (onDone) setTimeout(onDone, 250);
+  };
+  if ((localStorage.voice || 'google') !== 'google') return sysSpeak(text, rate, done);
   const q = ttsChunks(text);
   let failed = false;
+  const fallback = c => { if (failed || gen !== ttsGen) return; failed = true; sysSpeak([c, ...q].join(' '), rate, done); };
   const playNext = () => {
-    if (gen !== ttsGen || !q.length) return;
+    if (gen !== ttsGen) return;
+    if (!q.length) return done();
     const c = q.shift();
     player.src = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=' + encodeURIComponent(c);
     player.onended = playNext;
-    player.onerror = () => { if (gen !== ttsGen || failed) return; failed = true; sysSpeak([c, ...q].join(' '), rate); };
+    player.onerror = () => fallback(c);
     player.playbackRate = rate;
     player.defaultPlaybackRate = rate;
     player.preservesPitch = true;
     const p = player.play();
-    if (p) p.catch(e => { if (e.name !== 'AbortError' && !failed && gen === ttsGen) { failed = true; sysSpeak([c, ...q].join(' '), rate); } });
+    if (p) p.catch(e => { if (e.name !== 'AbortError') fallback(c); });
   };
   playNext();
 }
 
-export function speakThen(text, rate, cb) {
-  const v = localStorage.voice || 'google';
-  speak(text, rate);
-  if (v === 'google') {
-    const done = () => { player.removeEventListener('ended', done); setTimeout(cb, 250); };
-    player.addEventListener('ended', done);
-    setTimeout(() => { player.removeEventListener('ended', done); }, 15000);
-  } else setTimeout(cb, 600 + text.length * 120 / rate);
+export function stopSpeaking() {
+  ttsGen++;
+  speechSynthesis.cancel();
+  player.pause();
 }
