@@ -38,10 +38,16 @@ export const IDB = {
 export function validItems(a) {
   if (!Array.isArray(a)) a = a && a.items;
   if (!Array.isArray(a) || !a.length) throw new Error('JSON 必須是陣列（或 {items:[...]}）');
-  return a.map((d, k) => {
+  const items = a.map((d, k) => {
     if (!d || typeof d.e !== 'string') throw new Error('第 ' + (k + 1) + ' 筆缺少 "e"（英文）欄位');
     return Object.assign({ i: k + 1, t: 'sentence', z: '', x: '', p: '', l: '' }, d);
   });
+  // ids must be unique numbers (lookups use Number ids); fix up strings and duplicates
+  const used = new Set();
+  for (const d of items) { d.i = Number(d.i); if (Number.isFinite(d.i) && !used.has(d.i)) used.add(d.i); else d.i = NaN; }
+  let nextId = Math.max(0, ...used) + 1;
+  for (const d of items) if (Number.isNaN(d.i)) d.i = nextId++;
+  return items;
 }
 
 export function lessonOf(d) {
