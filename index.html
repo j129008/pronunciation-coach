@@ -40,6 +40,11 @@
 <small>綠＝正確、紅＝錯（下方小字為辨識到的字）、灰＝漏掉、黃＝多出來的字</small>
 </div>
 <div class="card">
+<details id="ipaPanel"><summary>🔤 音標教學（慢慢學 IPA）</summary>
+<p><small>每個音標都可以滑過去（手機：點一下）看發音卡；下面是全部英文音，你常錯的音會排在每組最前面並標記。</small></p>
+<div class="ip-set"><label><input type="checkbox" id="ipaTable"> 表格顯示音標</label> <label><input type="checkbox" id="ipaExpl"> 說明旁顯示音標小標籤</label> <button id="quizBtn" class="sec">🎯 小測驗</button></div>
+<div id="quizBox" hidden></div><div id="ipaGrid"></div>
+</details>
 <details><summary>🗣️ 我的常錯音（Azure 音素統計）</summary><div id="confList"></div><button id="clearConf" class="sec">清除</button></details>
 <details><summary>📋 弱點字紀錄</summary><div id="weakList"></div><button id="clearWeak" class="sec">清除紀錄</button></details>
 <details><summary>💾 備份 / 還原進度</summary><button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" id="forgetBtn">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
@@ -56,4 +61,5 @@ Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" siz
 <p><button id="loadSample">試用範例資料 Try sample data</button></p>
 <p><small>格式 Format：<code>[{"e":"English text","t":"sentence|vocab|extra","z":"中文","x":"example","p":"IPA","l":"L001"}]</code>，詳見 README。</small></p>
 <p id="loadErr" style="color:#b91c1c"></p></div></div>
+<div id="ipaCard" hidden></div>
 <script type="module" src="app.js"></script></body></html>

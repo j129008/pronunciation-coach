@@ -76,3 +76,22 @@ table.cmp{display:block;max-width:100%;overflow-x:auto}.wcard{max-width:100%}
 
 .phc.playing{background:#fde68a!important;outline:2px solid #f59e0b;color:#000}
 .vd{margin:4px 0;line-height:1.6}.tl{border-radius:5px;padding:0 6px;color:#fff;font-size:12px;background:#888}.tl.del,.tl.omit{background:#e5484d}.tl.ins{background:#f5a524}.tl.sub{background:#7c5cff}
+
+/* IPA learning: symbol chips, tooltip card, 音標教學 panel, quiz */
+.ipa{font-family:"Charis SIL","Doulos SIL","Lucida Sans Unicode","Segoe UI Symbol",serif;color:#6b7280;font-size:.85em;border-bottom:1px dotted #9ca3af;cursor:help;padding:0 2px;white-space:nowrap}
+.ipa[data-ipa]:hover,.ipa[data-ipa]:focus{background:#eef3ff;color:#1e3a8a;outline:none}
+.ipa.big{font-size:1.25em;color:#1f2937}.ipa-none{color:#9ca3af;font-size:.85em}
+.ipax{font-size:12px;color:#6b7280;margin:2px 0}
+#ipaCard{position:fixed;z-index:60;width:min(340px,calc(100vw - 16px));background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px #0003;padding:10px 12px;font-size:13px;line-height:1.6;color:var(--text)}
+.ic-h{display:flex;gap:10px;align-items:center}.ic-sym{font-family:"Charis SIL","Doulos SIL","Lucida Sans Unicode",serif;font-size:34px;line-height:1;min-width:40px;text-align:center}
+.ic-r{margin-top:4px}.ic-badge{font-size:11px;background:#e0e7ff;color:#3730a3;border-radius:6px;padding:0 5px;margin-left:4px}
+.ip-set{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:6px 0}.ip-top{background:#fff6e5;border-left:4px solid #f90;border-radius:6px;padding:6px 10px;margin:6px 0}
+#ipaGrid h4{margin:14px 0 2px;font-size:15px}.ip-sub{font-size:12px;color:var(--muted);margin:6px 0 4px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pcard{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;cursor:pointer}.pcard:hover{background:#f5f7ff}
+.pcard.missed{border-color:#e5484d;background:#fff5f5}.miss-badge{display:inline-block;font-size:11px;color:#b91c1c;margin-left:4px}
+.ph-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}.pw-row{margin:4px 0}.ptip{display:block;line-height:1.4}
+#quizBox{background:#f8f9fb;border-radius:10px;padding:10px 12px;margin:8px 0}.qq{margin:6px 0}.qopts{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.qo{background:#fff;color:var(--text);border:2px solid var(--line);min-width:64px;font-size:15px}.qo.right{border-color:#30a46c;background:#e6f7ee}.qo.wrong{border-color:#e5484d;background:#fdeaea}
+.qok{color:#1a7f4b}.qbad{color:#b91c1c}
+@media(max-width:600px){.pgrid{grid-template-columns:repeat(2,1fr)}}
