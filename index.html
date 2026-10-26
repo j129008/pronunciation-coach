@@ -30,7 +30,13 @@
 <div class="card" id="result" style="display:none">
 <div>比對分數：<span class="score" id="score"></span></div>
 <div id="words"></div><div id="heardAll" style="margin-top:6px"><small></small></div>
-<div id="tips" style="margin-top:8px"></div><div id="azure"></div>
+<div id="tips" style="margin-top:8px"></div>
+<div id="abTools" class="abtools" hidden>
+<label>我的錄音速度 <select id="segRate"><option value="0.5">0.5x</option><option value="0.6" selected>0.6x</option><option value="0.75">0.75x</option><option value="1">1x</option></select></label>
+<label>標準示範速度 <select id="stdRate"><option value="0.7" selected>慢 0.7x</option><option value="1">正常 1x</option></select></label>
+<label><input type="checkbox" id="abLoop"> 循環播放 A/B</label><button id="abStop" class="sec" hidden>■ 停止播放</button>
+</div>
+<div id="azure"></div>
 <small>綠＝正確、紅＝錯（下方小字為辨識到的字）、灰＝漏掉、黃＝多出來的字</small>
 </div>
 <div class="card">

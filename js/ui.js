@@ -7,6 +7,7 @@ import { phTip, ipaInfo, ipaHint, analyzeWord, ERR_ZH } from './phonemes.js';
 import { fillVoices, speak, stopSpeaking } from './tts.js';
 import { playSeg, stopSeg } from './playback.js';
 import { encodeWav, captureMic, assess } from './azure.js';
+import { explain, respell } from './explain.js';
 
 const TL = { sentence: '句子', vocab: '單字', extra: '補充' };
 const ST = { new: ['未練', '#b0b4bd'], weak: ['要加強', '#e5484d'], fair: ['還不錯', '#f5a524'], good: ['已熟練', '#30a46c'], due: ['待複習', '#7c5cff'] };
@@ -136,6 +137,7 @@ function show(d, reason) {
   $('result').style.display = 'none';
   $('summary').style.display = 'none';
   $('interim').textContent = '';
+  cancelAll();
   clearMine();
   lastCap = null;
   azWords = [];
@@ -190,6 +192,7 @@ function renderConf() {
 }
 function showResult(best, alts) {
   $('azure').innerHTML = '';
+  $('abTools').hidden = false;
   const { a, score } = best;
   $('result').style.display = 'block';
   $('score').textContent = score + '%';
@@ -230,11 +233,51 @@ function clearMine() {
   $('playMine').hidden = true;
   $('reRec').hidden = true;
 }
+// ---- playback speed + A/B compare ----
+const segRate = () => +$('segRate').value || 0.6;
+const stdRate = () => +$('stdRate').value || 0.7;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const speakP = (text, rate) => new Promise(res => speak(text, rate, res));
+let abTok = 0;
+function cancelAll() {
+  abTok++;
+  stopSpeaking();
+  stopSeg();
+  $('abStop').hidden = true;
+}
+// standard (TTS of `text`) → short pause → your own slice, optionally looped
+async function runAB(text, off, dur) {
+  if (!lastCap || off == null || dur == null) { status('沒有錄音或時間資料可播'); return; }
+  $('myAudio').pause();
+  cancelAll();
+  const tok = abTok;
+  $('abStop').hidden = false;
+  do {
+    await speakP(text, stdRate());
+    if (tok !== abTok) return;
+    await sleep(250);
+    if (tok !== abTok) return;
+    await playSeg(lastCap, off, dur, { rate: segRate() });
+    if (tok !== abTok) return;
+    if (!$('abLoop').checked) break;
+    await sleep(700);
+    if (tok !== abTok) return;
+  } while ($('abLoop').checked);
+  if (tok === abTok) $('abStop').hidden = true;
+}
+const abWord = wi => { const w = azWords[wi]; if (w && w.et !== 'Omission') runAB(w.word, w.offset, w.dur); };
+const abPhoneme = (wi, k) => { const w = azWords[wi], r = w && w.rows[k]; if (r && w.et !== 'Omission') runAB(w.word, r.off, r.dur); };
+
+const explainHtml = x => !x ? '' : `<div class="xp">你：${esc(x.did)}<br>應該：${esc(x.should)}<br>🛠 ${esc(x.fix)}</div>` +
+  (x.pairs.length ? '<div class="xp">對比字（點了會唸）：' + x.pairs.map(([a, b]) => `<span class="pw" data-say="${esc(a)}">${esc(a)}</span> / <span class="pw" data-say="${esc(b)}">${esc(b)}</span>`).join('　') + '</div>' : '');
+const spelled = w => ({ target: respell(w.rows.map(r => r.exp)), said: respell(w.rows.map(r => (r.bad ? r.heard : r.exp))) });
+
 function playMine() {
   const a = $('myAudio');
   if (!myUrl) return;
-  stopSpeaking();
-  stopSeg();
+  cancelAll();
+  a.preservesPitch = a.mozPreservesPitch = a.webkitPreservesPitch = true;
+  a.playbackRate = segRate();
   a.currentTime = 0;
   a.play().catch(() => {});
 }
@@ -244,7 +287,7 @@ function toggleMine() {
 }
 function syncRecButtons() { $('playMine').disabled = $('reRec').disabled = busy; }
 // silence everything that could bleed into the mic before a new take
-function prepareToRecord() { stopSpeaking(); stopSeg(); $('myAudio').pause(); }
+function prepareToRecord() { cancelAll(); $('myAudio').pause(); }
 const useAzure = () => $('azOn').checked && !!localStorage.azKey && !!localStorage.azRegion;
 function updBadge() {
   const b = $('modeBadge');
@@ -358,11 +401,11 @@ function renderAzure(j) {
   azWords = words;
   const issues = [];
   const conf = P.getConf();
-  for (const w of words) {
+  for (const [wi, w] of words.entries()) {
     if (w.et === 'Insertion') continue;
-    for (const r of w.rows) if (r.bad || w.et === 'Omission') {
+    for (const [ki, r] of w.rows.entries()) if (r.bad || w.et === 'Omission') {
       const k = r.exp + '→' + r.heard;
-      issues.push({ w: w.word, k, r, score: r.score });
+      issues.push({ w: w.word, k, r, score: r.score, wi, ki });
       conf[k] = conf[k] || { n: 0, w: [] };
       conf[k].n++;
       if (!conf[k].w.includes(w.word)) conf[k].w.push(w.word);
@@ -381,18 +424,27 @@ function renderAzure(j) {
   }
   let h = `<hr><b>Azure 評估</b>：總分 ${f(p.PronScore)}・準確度 ${f(p.AccuracyScore)}・流暢度 ${f(p.FluencyScore)}・完整度 ${f(p.CompletenessScore)}・韻律 ${f(p.ProsodyScore)}
  <div style="margin:6px 0"><button id="abAll">🔁 整句 A/B（標準 → 我的）</button></div>`;
-  if (top.length) h += '<div class="issues"><b>🎯 你這句最需要改的音</b><ol>' + top.map(x => `<li><b>${esc(x.w)}</b>：/<span class="pe">${esc(x.r.exp)}</span>/ → /<span class="ph-bad">${esc(x.r.heard)}</span>/ — ${esc(phTip(x.r.exp, x.r.heard, x.r.isFinal, x.w))}</li>`).join('') + '</ol></div>';
+  if (top.length) h += '<div class="issues"><b>🎯 你這句最需要改的音</b><ol>' + top.map(x => {
+    const sp = spelled(words[x.wi]);
+    return `<li><b>${esc(x.w)}</b>　目標讀法 <span class="rs">${esc(sp.target)}</span> → 你聽起來像 <span class="rs bad">${esc(sp.said) || '（沒唸出來）'}</span><br>
+ /<span class="pe">${esc(x.r.exp)}</span>/ → /<span class="ph-bad">${esc(x.r.heard)}</span>/${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w }))}
+ ${lastCap && words[x.wi].et !== 'Omission' ? `<button class="sm" data-abp="${x.wi},${x.ki}">⇄ A/B：標準 → 我的</button>` : ''}</li>`;
+  }).join('') + '</ol></div>';
   else h += '<div class="issues">🎉 沒有明顯的錯誤音素！</div>';
   h += '<div class="cards">' + words.map((w, i) => {
     const cls = w.et === 'Omission' ? 'miss' : (w.et === 'None' && w.score >= 80 ? 'ok' : 'bad');
+    const sp = spelled(w), canPlay = w.et !== 'Omission' && lastCap;
     return `<div class="wcard ${cls}"><div><b style="font-size:18px">${esc(w.word)}</b> <small>${f(w.score)}分 ${ERR_ZH[w.et] ? '・' + ERR_ZH[w.et] : ''}</small>
-  <button class="sm" data-std="${i}">🔊 標準</button>${w.et !== 'Omission' && lastCap ? `<button class="sm" data-mine="${i}">🎤 我的</button>` : ''}</div>
+  <button class="sm" data-std="${i}">🔊 標準</button>${canPlay ? `<button class="sm" data-mine="${i}">🎤 我的</button><button class="sm" data-abw="${i}">⇄ A/B</button>` : ''}</div>
+  ${sp.target !== sp.said ? `<div class="rsp">目標讀法 <b class="rs">${esc(sp.target)}</b>　你聽起來像 <b class="rs bad">${esc(sp.said) || '（沒唸出來）'}</b></div>` : ''}
   <table class="cmp"><tr><th>字母</th>${w.rows.map(r => `<td class="lt">${esc(r.let || '')}</td>`).join('')}</tr>
   <tr><th>標準<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'pe' : ''}" data-pe="${i},${k}" title="${esc(ipaHint(r.exp))}">${esc(r.exp)}</td>`).join('')}</tr>
   <tr><th>你的<br><small>（點我聽）</small></th>${w.rows.map((r, k) => `<td class="phc ${r.bad ? 'ph-bad' : 'ph-ok'}" data-ph="${i},${k}" title="${esc(r.heard !== r.exp && r.heard !== '—' ? '你唸成 ' + ipaHint(r.heard) : '點我聽你自己這個音')}">${esc(r.heard)}</td>`).join('')}</tr>
-  <tr><th>分數</th>${w.rows.map(r => `<td><small>${f(r.score)}</small></td>`).join('')}</tr></table><div class="phint" id="phint${i}"></div></div>`;
+  <tr><th>分數</th>${w.rows.map(r => `<td><small>${f(r.score)}</small></td>`).join('')}</tr>
+  ${canPlay ? `<tr><th>A/B</th>${w.rows.map((r, k) => `<td><button class="sm" data-abp="${i},${k}" title="標準單字 → 你的這個音">⇄</button></td>`).join('')}</tr>` : ''}</table><div class="phint" id="phint${i}"></div></div>`;
   }).join('') + '</div>';
-  $('azure').innerHTML = h + '<small>👉 點「標準」格：聽這個音的示範字；點「你的」格：只播你自己唸的那一小段。點單字卡其他地方：先播標準發音（慢速）再播你自己的那段錄音。紅色＝不準的音素；「你的發音」為 Azure 判斷最像的音。</small>';
+  $('azure').innerHTML = h + '<small>👉 點「標準」格：聽這個音的示範字；點「你的」格：只播你自己唸的那一小段。點單字卡其他地方：先播標準發音再播你自己的那段錄音。「⇄」＝A/B：先聽標準單字，停一下，再聽你的那一段（可勾選循環）；播放速度可在上方調整。紅色＝不準的音素；「你的發音」為 Azure 判斷最像的音。</small>';
+  $('abTools').hidden = false;
   status('Azure 評估完成');
   recordAttempt(p.PronScore != null ? p.PronScore : base.score);
 }
@@ -402,6 +454,10 @@ function onAzureClick(e) {
   if (!t.closest) return;
   const std = t.closest('[data-std]'), mine = t.closest('[data-mine]'), card = t.closest('.wcard'), ab = t.closest('#abAll');
   const W = azWords;
+  const abp = t.closest('[data-abp]'), abw = t.closest('[data-abw]'), say = t.closest('[data-say]');
+  if (abp) { const [wi, k] = abp.dataset.abp.split(',').map(Number); abPhoneme(wi, k); return; }
+  if (abw) { abWord(+abw.dataset.abw); return; }
+  if (say) { speak(say.dataset.say, stdRate()); return; }
   const pe = t.closest('[data-pe]'), pm = t.closest('[data-ph]');
   if (pe || pm) {
     const [wi, k] = (pe || pm).dataset[pe ? 'pe' : 'ph'].split(',').map(Number);
@@ -413,26 +469,27 @@ function onAzureClick(e) {
     if (pe) {
       const x = ipaInfo(r.exp);
       if (box) box.innerHTML = `🔊 <b>${esc(r.let || '')}</b> → ${esc(ipaHint(r.exp))}` + (x ? `　<small>示範字：<b>${esc(x.w)}</b>，接著唸 ${esc(w.word)}</small>` : '');
-      if (x) speak(x.w, 0.7, () => speak(w.word, 0.7)); else speak(w.word, 0.7);
+      if (x) speak(x.w, stdRate(), () => speak(w.word, stdRate())); else speak(w.word, stdRate());
     } else {
       let m = '🎤 你的這個音';
       if (r.heard === '—') m = '⚠️ 這個音你沒唸出來（漏音）';
       else if (r.heard !== r.exp) m += `：你唸成 ${esc(ipaHint(r.heard))}<br>✅ 應該是 ${esc(ipaHint(r.exp))}`;
       else m += `：${esc(ipaHint(r.exp))}`;
+      m += explainHtml(explain(r.exp, r.heard, { isFinal: r.isFinal, word: w.word }));
       if (!lastCap || r.off == null || w.et === 'Omission') m += '<br><small>（沒有錄音或時間資料可播）</small>';
-      else playSeg(lastCap, r.off, r.dur, 0.06);
+      else { cancelAll(); playSeg(lastCap, r.off, r.dur, { rate: segRate() }); }
       if (box) box.innerHTML = m;
     }
     return;
   }
-  if (std) { speak(W[+std.dataset.std].word, 0.7); return; }
-  if (mine) { const w = W[+mine.dataset.mine]; playSeg(lastCap, w.offset, w.dur); return; }
-  if (ab) { speak(cur.e, 1, playMine); return; }
+  if (std) { speak(W[+std.dataset.std].word, stdRate()); return; }
+  if (mine) { const w = W[+mine.dataset.mine]; cancelAll(); playSeg(lastCap, w.offset, w.dur, { rate: segRate() }); return; }
+  if (ab) { speak(cur.e, stdRate(), playMine); return; }
   if (card) {
     const i = [...card.parentNode.children].indexOf(card);
     const w = W[i];
     if (!w) return;
-    speak(w.word, 0.7, () => { if (w.et !== 'Omission') playSeg(lastCap, w.offset, w.dur); });
+    speak(w.word, stdRate(), () => { if (w.et !== 'Omission') playSeg(lastCap, w.offset, w.dur, { rate: segRate() }); });
   }
 }
 
@@ -450,6 +507,13 @@ export function startApp(items) {
     defaultRecognize();
   };
   $('listen').onclick = () => cur && say(cur.e);
+  $('segRate').value = localStorage.segRate || '0.6';
+  $('stdRate').value = localStorage.stdRate || '0.7';
+  $('abLoop').checked = localStorage.abLoop === '1';
+  $('segRate').onchange = e => { localStorage.segRate = e.target.value; };
+  $('stdRate').onchange = e => { localStorage.stdRate = e.target.value; };
+  $('abLoop').onchange = e => { localStorage.abLoop = e.target.checked ? '1' : '0'; };
+  $('abStop').onclick = cancelAll;
   $('playMine').onclick = toggleMine;
   $('reRec').onclick = () => $('rec').click();
   $('weakList').onclick = e => { const s = e.target.closest('[data-w]'); if (s) speak(s.dataset.w, 0.7); };
