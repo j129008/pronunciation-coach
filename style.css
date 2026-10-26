@@ -106,3 +106,5 @@ dialog#addDlg::backdrop{background:#0006}
 .err{color:#b91c1c}#addList{padding-left:24px;margin:8px 0}#addList li{margin:4px 0}#addList .ln{width:calc(100% - 210px);min-width:160px}
 .adlg-b{position:sticky;bottom:0;background:#fff;padding:8px 0}.al{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0}
 @media(max-width:600px){#addList .ln{width:100%}}
+
+.grp.pre{background:#eef6ff}

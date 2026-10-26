@@ -35,7 +35,7 @@ export function showLoadScreen() {
 export function hideLoadScreen() { $('loadScreen').style.display = 'none'; }
 
 // ---- app state ----
-let DATA, ORDERED, byId, pinned = null;
+let DATA, ORDERED, byId, pinned = null, pinnedLabels = [];
 let BASE = [], USERI = [], fLesson = '';
 let filtered = [], cur = null;
 let fStatus = 'all', fType = '', fQuery = '';
@@ -89,7 +89,7 @@ function buildRows() {
     let done = 0, sum = 0, n = 0;
     for (const d of items) { const p = PROG[d.i]; if (p && p.a) { done++; sum += p.l; n++; } }
     const open = expandAll ? !openG.has('x' + L) : openG.has(L);
-    rows.push({ h: 1, L, items: items.length, done, avg: n ? Math.round(sum / n) : null, open, u: !!items[0].u });
+    rows.push({ h: 1, L, items: items.length, done, avg: n ? Math.round(sum / n) : null, open, u: !!items[0].u, pre: !!items[0].pre });
     if (open) for (const d of items) rows.push({ d });
   }
   let y = 0;
@@ -110,8 +110,8 @@ function drawRows() {
     if (r.y + RH < top - 200) continue;
     if (r.y > bot) break;
     if (r.h) {
-      const title = r.u ? (r.L === pinned ? '📝 課前練習 · ' : '📝 ') + esc(r.L) : esc(r.L);
-      h += `<div class="grp${r.u ? ' user' : ''}" style="top:${r.y}px" data-g="${esc(r.L)}"><span>${r.open ? '▾' : '▸'} ${title}</span><small>${r.done}/${r.items}${r.avg != null ? ' • 平均 ' + r.avg : ''}</small><i class="gbar"><i style="width:${100 * r.done / r.items}%"></i></i>${r.u ? `<button class="gdel" data-delg="${esc(r.L)}" title="刪除這個課程">🗑</button>` : ''}</div>`;
+      const title = r.u ? (r.L === pinned ? '📝 課前練習 · ' : '📝 ') + esc(r.L) : r.pre ? '📌 ' + esc(r.L) : esc(r.L);
+      h += `<div class="grp${r.u ? ' user' : r.pre ? ' pre' : ''}" style="top:${r.y}px" data-g="${esc(r.L)}"><span>${r.open ? '▾' : '▸'} ${title}</span><small>${r.done}/${r.items}${r.avg != null ? ' • 平均 ' + r.avg : ''}</small><i class="gbar"><i style="width:${100 * r.done / r.items}%"></i></i>${r.u ? `<button class="gdel" data-delg="${esc(r.L)}" title="刪除這個課程">🗑</button>` : ''}</div>`;
     } else {
       const d = r.d, p = PROG[d.i], s = statusOf(d.i, now);
       h += `<div class="row${cur === d ? ' cur' : ''}" style="top:${r.y}px" data-i="${d.i}"><i class="dot" style="background:${ST[s][1]}" title="${ST[s][0]}"></i><span class="rt">${esc(d.e)}</span><span class="rm">${p && p.a ? `<b>${p.b}</b><small>×${p.a}</small>` : `<small>${TL[d.t]}</small>`}${s === 'due' ? '<em class="due">待複習</em>' : ''}</span></div>`;
@@ -155,7 +155,7 @@ function show(d, reason) {
 }
 function next() {
   if (cur) P.markSeen(cur.i);
-  const r = P.smartPickPinned(filtered, pinned, Date.now(), cur && cur.i);
+  const r = P.smartPickPinned(filtered, pinnedLabels, Date.now(), cur && cur.i);
   if (!r) return alert('目前篩選條件下沒有項目');
   show(r.d, r.why);
 }
@@ -554,7 +554,7 @@ function refreshLessons() {
 // rebuild everything from base + user items after a change
 function applyItems(user) {
   USERI = user;
-  ({ DATA, ORDERED, byId, pinned } = prepareItems([...BASE, ...USERI]));
+  ({ DATA, ORDERED, byId, pinned, pinnedLabels } = prepareItems([...BASE, ...USERI]));
   if (pinned) openG.add(pinned);
   refreshLessons();
   applyFilter();
@@ -589,7 +589,7 @@ function exportUser() {
 export function startApp(items) {
   BASE = items.filter(d => !d.u);
   USERI = items.filter(d => d.u);
-  ({ DATA, ORDERED, byId, pinned } = prepareItems(items));
+  ({ DATA, ORDERED, byId, pinned, pinnedLabels } = prepareItems(items));
   filtered = ORDERED;
   if (pinned) openG.add(pinned);
   P.migrate(byId);
@@ -715,5 +715,5 @@ export function startApp(items) {
   if (innerWidth >= 900) document.body.classList.add('side-open');
   const h = +location.hash.slice(1);
   if (byId.get(h)) show(byId.get(h));
-  else { const r = P.smartPickPinned(ORDERED, pinned); r ? show(r.d, r.why) : show(ORDERED[0]); }
+  else { const r = P.smartPickPinned(ORDERED, pinnedLabels); r ? show(r.d, r.why) : show(ORDERED[0]); }
 }

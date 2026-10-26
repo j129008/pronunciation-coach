@@ -113,10 +113,12 @@ export function forgetItems(ids) {
   localStorage.weakItems = JSON.stringify(wi);
 }
 
-// prefer the pinned (課前練習) lesson while it still has something to practise, else the whole pool
+// prefer the pinned (課前練習) lessons — a label or a list of labels — while they still have something
+// to practise (pool order = display order, so the top lesson wins), else the whole pool
 export function smartPickPinned(pool, pinned, now, lastId, prog = PROG) {
-  if (pinned) {
-    const pp = pool.filter(d => d.u && d.L === pinned);
+  const labels = [].concat(pinned || []);
+  if (labels.length) {
+    const pp = pool.filter(d => (d.u || d.pre) && labels.includes(d.L));
     if (pp.length) {
       const r = smartPick(pp, now, lastId, prog);
       if (r && !r.fallback) return { ...r, why: '📝 課前練習｜' + r.why };
