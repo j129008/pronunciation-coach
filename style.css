@@ -95,3 +95,14 @@ table.cmp{display:block;max-width:100%;overflow-x:auto}.wcard{max-width:100%}
 .qo{background:#fff;color:var(--text);border:2px solid var(--line);min-width:64px;font-size:15px}.qo.right{border-color:#30a46c;background:#e6f7ee}.qo.wrong{border-color:#e5484d;background:#fdeaea}
 .qok{color:#1a7f4b}.qbad{color:#b91c1c}
 @media(max-width:600px){.pgrid{grid-template-columns:repeat(2,1fr)}}
+
+/* 📝 加入文章 */
+#addBtn{flex:1}#lessonSel{max-width:150px}
+.grp.user{background:#fff8e6}.gdel{background:none;color:#b91c1c;padding:0 4px;margin:0;min-height:0;font-size:13px}
+dialog#addDlg{border:0;border-radius:14px;padding:0;width:min(720px,96vw);max-height:92vh;box-shadow:0 12px 40px #0005}
+dialog#addDlg::backdrop{background:#0006}
+.adlg{padding:16px 18px;overflow:auto;max-height:90vh}.adlg h3{margin:0 0 8px}.al-l{display:block;margin:6px 0}.al-l input{width:100%}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:8px}.drop.over{border-color:var(--pri);background:#eef3ff}.drop textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}
+.err{color:#b91c1c}#addList{padding-left:24px;margin:8px 0}#addList li{margin:4px 0}#addList .ln{width:calc(100% - 210px);min-width:160px}
+.adlg-b{position:sticky;bottom:0;background:#fff;padding:8px 0}.al{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0}
+@media(max-width:600px){#addList .ln{width:100%}}

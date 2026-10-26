@@ -1,6 +1,8 @@
 // All DOM wiring: sidebar list, dashboard, practice card, recording, results, Azure result cards.
 import { $, esc, dkey } from './util.js';
-import { IDB, validItems, prepareItems } from './data.js';
+import { IDB, validItems, prepareItems, saveUserItems } from './data.js';
+import { lessonsOf, makeUserItems, deleteLesson, exportUserItems, userLabel } from './lessons.js';
+import { initAdd, renderAddLessons } from './addui.js';
 import * as P from './progress.js';
 import { scoreHyp, tipsFor } from './align.js';
 import { ipaInfo, analyzeWord, ERR_ZH } from './phonemes.js';
@@ -33,7 +35,8 @@ export function showLoadScreen() {
 export function hideLoadScreen() { $('loadScreen').style.display = 'none'; }
 
 // ---- app state ----
-let DATA, ORDERED, byId;
+let DATA, ORDERED, byId, pinned = null;
+let BASE = [], USERI = [], fLesson = '';
 let filtered = [], cur = null;
 let fStatus = 'all', fType = '', fQuery = '';
 const openG = new Set();
@@ -46,7 +49,8 @@ const say = (text, rate) => speak(text, rate || ($('slow').checked ? 0.7 : 1));
 
 function inFilter(d, now) {
   if (fType && d.t !== fType) return false;
-  if (fQuery && !(d.e + ' ' + d.z + ' ' + (d.x || '') + ' #' + d.i).toLowerCase().includes(fQuery)) return false;
+  if (fQuery && !(d.e + ' ' + d.z + ' ' + (d.x || '') + (d.u ? ' ' + d.l : '') + ' #' + d.i).toLowerCase().includes(fQuery)) return false;
+  if (fLesson === '__user__' ? !d.u : fLesson && d.L !== fLesson) return false;
   if (fStatus !== 'all' && statusOf(d.i, now) !== fStatus) return false;
   return true;
 }
@@ -79,13 +83,13 @@ function buildRows() {
   const PROG = P.getProg();
   const groups = new Map();
   for (const d of filtered) { if (!groups.has(d.L)) groups.set(d.L, []); groups.get(d.L).push(d); }
-  const expandAll = !!fQuery || fStatus !== 'all';
+  const expandAll = !!fQuery || fStatus !== 'all' || !!fLesson;
   rows = [];
   for (const [L, items] of groups) {
     let done = 0, sum = 0, n = 0;
     for (const d of items) { const p = PROG[d.i]; if (p && p.a) { done++; sum += p.l; n++; } }
     const open = expandAll ? !openG.has('x' + L) : openG.has(L);
-    rows.push({ h: 1, L, items: items.length, done, avg: n ? Math.round(sum / n) : null, open });
+    rows.push({ h: 1, L, items: items.length, done, avg: n ? Math.round(sum / n) : null, open, u: !!items[0].u });
     if (open) for (const d of items) rows.push({ d });
   }
   let y = 0;
@@ -106,7 +110,8 @@ function drawRows() {
     if (r.y + RH < top - 200) continue;
     if (r.y > bot) break;
     if (r.h) {
-      h += `<div class="grp" style="top:${r.y}px" data-g="${r.L}"><span>${r.open ? '▾' : '▸'} ${r.L}</span><small>${r.done}/${r.items}${r.avg != null ? ' • 平均 ' + r.avg : ''}</small><i class="gbar"><i style="width:${100 * r.done / r.items}%"></i></i></div>`;
+      const title = r.u ? (r.L === pinned ? '📝 課前練習 · ' : '📝 ') + esc(r.L) : esc(r.L);
+      h += `<div class="grp${r.u ? ' user' : ''}" style="top:${r.y}px" data-g="${esc(r.L)}"><span>${r.open ? '▾' : '▸'} ${title}</span><small>${r.done}/${r.items}${r.avg != null ? ' • 平均 ' + r.avg : ''}</small><i class="gbar"><i style="width:${100 * r.done / r.items}%"></i></i>${r.u ? `<button class="gdel" data-delg="${esc(r.L)}" title="刪除這個課程">🗑</button>` : ''}</div>`;
     } else {
       const d = r.d, p = PROG[d.i], s = statusOf(d.i, now);
       h += `<div class="row${cur === d ? ' cur' : ''}" style="top:${r.y}px" data-i="${d.i}"><i class="dot" style="background:${ST[s][1]}" title="${ST[s][0]}"></i><span class="rt">${esc(d.e)}</span><span class="rm">${p && p.a ? `<b>${p.b}</b><small>×${p.a}</small>` : `<small>${TL[d.t]}</small>`}${s === 'due' ? '<em class="due">待複習</em>' : ''}</span></div>`;
@@ -129,7 +134,7 @@ function show(d, reason) {
   if (!d) return;
   cur = d;
   const p = P.getProg()[d.i], s = statusOf(d.i);
-  $('meta').innerHTML = `<span class="tag" style="background:${ST[s][1]}">${ST[s][0]}</span> #${d.i}・${TL[d.t]}・${esc(d.L)}${p && p.a ? `・最佳 <b>${p.b}</b>・上次 ${p.l}・練 ${p.a} 次・歷史 ${p.h.join(' → ')}` : ''}`;
+  $('meta').innerHTML = `<span class="tag" style="background:${ST[s][1]}">${ST[s][0]}</span> ${d.u ? userLabel(d) : '#' + d.i}・${TL[d.t]}・${esc(d.L)}${p && p.a ? `・最佳 <b>${p.b}</b>・上次 ${p.l}・練 ${p.a} 次・歷史 ${p.h.join(' → ')}` : ''}`;
   $('reason').textContent = reason || '';
   $('reason').style.display = reason ? 'inline-block' : 'none';
   $('tgt').textContent = d.e;
@@ -150,7 +155,7 @@ function show(d, reason) {
 }
 function next() {
   if (cur) P.markSeen(cur.i);
-  const r = P.smartPick(filtered, Date.now(), cur && cur.i);
+  const r = P.smartPickPinned(filtered, pinned, Date.now(), cur && cur.i);
   if (!r) return alert('目前篩選條件下沒有項目');
   show(r.d, r.why);
 }
@@ -536,11 +541,62 @@ function onAzureClick(e) {
   }
 }
 
+// ---- user-added lessons (📝 加入文章) ----
+function refreshLessons() {
+  const ls = lessonsOf(USERI);
+  const sel = $('lessonSel');
+  sel.hidden = !ls.length;
+  sel.innerHTML = '<option value="">全部課程</option><option value="__user__">📝 全部加入的文章</option>' + ls.map(l => `<option value="${esc(l.label)}">${esc(l.label)}（${l.count}）</option>`).join('');
+  if (![...sel.options].some(o => o.value === fLesson)) fLesson = '';
+  sel.value = fLesson;
+  renderAddLessons(ls);
+}
+// rebuild everything from base + user items after a change
+function applyItems(user) {
+  USERI = user;
+  ({ DATA, ORDERED, byId, pinned } = prepareItems([...BASE, ...USERI]));
+  if (pinned) openG.add(pinned);
+  refreshLessons();
+  applyFilter();
+  renderDash();
+}
+async function saveLesson({ label, lines }) {
+  const added = makeUserItems(lines, label, USERI);
+  await saveUserItems([...USERI, ...added]);
+  fLesson = '';
+  applyItems([...USERI, ...added]);
+  openG.add(added[0].l);
+  show(byId.get(added[0].i), '📝 課前練習');
+}
+async function removeLesson(label) {
+  const n = USERI.filter(d => d.l === label).length;
+  if (!confirm(`刪除課程「${label}」的 ${n} 個句子與它們的練習紀錄？（原本的題目不受影響）`)) return;
+  const { user, removedIds } = deleteLesson(USERI, label);
+  await saveUserItems(user);
+  P.forgetItems(removedIds);
+  const hadCur = cur && removedIds.includes(cur.i);
+  applyItems(user);
+  if (hadCur) { cur = null; next(); }
+}
+function exportUser() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(exportUserItems(USERI), null, 1)], { type: 'application/json' }));
+  a.download = 'my_articles_' + dkey(Date.now()) + '.json';
+  a.click();
+}
+
 // ---- entry ----
 export function startApp(items) {
-  ({ DATA, ORDERED, byId } = prepareItems(items));
+  BASE = items.filter(d => !d.u);
+  USERI = items.filter(d => d.u);
+  ({ DATA, ORDERED, byId, pinned } = prepareItems(items));
   filtered = ORDERED;
+  if (pinned) openG.add(pinned);
   P.migrate(byId);
+  initAdd({ onSave: saveLesson, onDeleteLesson: removeLesson, onExport: exportUser });
+  $('exportUserBtn').onclick = exportUser;
+  $('lessonSel').onchange = e => { fLesson = e.target.value; applyFilter(); };
+  refreshLessons();
 
   $('rec').onclick = async () => {
     if (!cur) return alert('請先選擇一個項目');
@@ -593,9 +649,11 @@ export function startApp(items) {
   // list + filters
   $('vlist').addEventListener('scroll', () => requestAnimationFrame(drawRows));
   $('vinner').onclick = e => {
+    const dg = e.target.closest('[data-delg]');
+    if (dg) { removeLesson(dg.dataset.delg); return; }
     const g = e.target.closest('[data-g]');
     if (g) {
-      const L = g.dataset.g, ea = !!fQuery || fStatus !== 'all';
+      const L = g.dataset.g, ea = !!fQuery || fStatus !== 'all' || !!fLesson;
       if (ea) { openG.has('x' + L) ? openG.delete('x' + L) : openG.add('x' + L); }
       else { openG.has(L) ? openG.delete(L) : openG.add(L); }
       renderList();
@@ -657,5 +715,5 @@ export function startApp(items) {
   if (innerWidth >= 900) document.body.classList.add('side-open');
   const h = +location.hash.slice(1);
   if (byId.get(h)) show(byId.get(h));
-  else { const r = P.smartPick(ORDERED); r ? show(r.d, r.why) : show(ORDERED[0]); }
+  else { const r = P.smartPickPinned(ORDERED, pinned); r ? show(r.d, r.why) : show(ORDERED[0]); }
 }

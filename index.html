@@ -5,6 +5,7 @@
 <div class="layout">
 <aside>
 <div class="filters">
+<div class="srow"><button id="addBtn" class="primary">📝 加入文章</button><select id="lessonSel" hidden title="只看加入的課程"></select></div>
 <div id="chips"><button class="chip on" data-st="all">全部<em></em></button><button class="chip" data-st="new">未練<em></em></button><button class="chip" data-st="weak">要加強<em></em></button><button class="chip" data-st="fair">還不錯<em></em></button><button class="chip" data-st="good">已熟練<em></em></button><button class="chip" data-st="due">待複習<em></em></button></div>
 <div id="tchips"><button class="chip on" data-t="">全部類型</button><button class="chip" data-t="sentence">句子</button><button class="chip" data-t="vocab">單字</button><button class="chip" data-t="extra">補充</button></div>
 <div class="srow"><input id="q" placeholder="🔍 搜尋英文 / 中文 / #編號"><input id="jid" placeholder="id" style="width:64px"><button id="jump" class="sec">跳</button></div>
@@ -47,7 +48,7 @@
 </details>
 <details><summary>🗣️ 我的常錯音（Azure 音素統計）</summary><div id="confList"></div><button id="clearConf" class="sec">清除</button></details>
 <details><summary>📋 弱點字紀錄</summary><div id="weakList"></div><button id="clearWeak" class="sec">清除紀錄</button></details>
-<details><summary>💾 備份 / 還原進度</summary><button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" id="forgetBtn">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
+<details><summary>💾 備份 / 還原進度</summary><button id="exportUserBtn" class="sec">⬇ 匯出加入的文章 JSON</button> <button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" id="forgetBtn">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
 <details><summary>⚙️ 進階：Azure 發音評估（音素級分數）</summary>
 <p><small>輸入 Azure Speech 金鑰與區域（如 eastasia）。只存在本機 localStorage。</small></p>
 Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" size="10">
@@ -61,5 +62,15 @@ Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" siz
 <p><button id="loadSample">試用範例資料 Try sample data</button></p>
 <p><small>格式 Format：<code>[{"e":"English text","t":"sentence|vocab|extra","z":"中文","x":"example","p":"IPA","l":"L001"}]</code>，詳見 README。</small></p>
 <p id="loadErr" style="color:#b91c1c"></p></div></div>
+<dialog id="addDlg"><div class="adlg">
+<h3>📝 加入文章（課前練習）</h3>
+<label class="al-l">課程名稱／日期 <input id="addLabel" placeholder="例：L045 2026/10/28 Job interview" maxlength="80"></label>
+<div id="addDrop" class="drop"><textarea id="addText" rows="8" placeholder="貼上英文文章，或把 .txt / .md 檔拖到這裡"></textarea>
+<div><input type="file" id="addFile" accept=".txt,.md,.markdown,text/plain,text/markdown" multiple> <button id="addSplit" class="sec">✂ 拆成句子</button> <span id="addCount"></span> <span id="addMsg" class="err"></span></div></div>
+<p><small>拆句後可以直接改字、刪除，或把兩行合併；沒有拆對的地方請在這裡修正。儲存後會加在最前面的「課前練習」，不會動到原本的題目。</small></p>
+<ol id="addList"></ol>
+<div class="adlg-b"><button id="addSave" class="primary" disabled>💾 儲存</button> <button id="addClose" class="sec">關閉</button></div>
+<details><summary>已加入的課程（可刪除）</summary><div id="addLessons"></div><button id="addExport" class="sec">⬇ 匯出加入的文章 JSON</button></details>
+</div></dialog>
 <div id="ipaCard" hidden></div>
 <script type="module" src="app.js"></script></body></html>
