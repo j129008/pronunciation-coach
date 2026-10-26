@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ipaNorm, ipaInfo, ipaHint, alignLetters, analyzeWord, phTip } from '../js/phonemes.js';
-import { segmentRange, TICKS } from '../js/playback.js';
+import { segmentRange, activeIndex, TICKS } from '../js/playback.js';
 
 test('ipaNorm maps variants to the keys used by the hint table', () => {
   assert.equal(ipaNorm('iː'), 'i');
@@ -64,4 +64,17 @@ test('segmentRange rejects missing/invalid timing instead of throwing later', ()
 test('segmentRange default padding is 120 ms each side', () => {
   const rg = segmentRange(1 * TICKS, 0.5 * TICKS, 1000, 10000);
   assert.deepEqual(rg, { s0: 880, s1: 1620 });
+});
+
+test('activeIndex finds the bad phoneme sounding at time t (for highlighting)', () => {
+  const rows = [
+    { exp: 'w', bad: true, off: 1 * TICKS, dur: 0.2 * TICKS },
+    { exp: 'i', bad: false, off: 1.2 * TICKS, dur: 0.3 * TICKS },
+  ];
+  assert.equal(activeIndex(rows, 0.5), -1);
+  assert.equal(activeIndex(rows, 1.1), 0);
+  assert.equal(activeIndex(rows, 1.3), -1);       // good phoneme: not highlighted by default
+  assert.equal(activeIndex(rows, 1.3, 1), 1);     // …unless it is the one that was clicked
+  assert.equal(activeIndex(rows, null), -1);
+  assert.equal(activeIndex([{ bad: true }], 1), -1); // missing timing
 });

@@ -62,6 +62,15 @@ export function respellWord(rows) {
   return { target, said, differs: target !== said };
 }
 
+// "電腦聽你唸成「ree」，正確是「we」" — the respelling of what was actually said, to be spoken by TTS
+// before the correct word so the difference is heard as words, not phonemes. null when nothing to compare.
+export function heardAs(word, rows) {
+  const sp = respellWord(rows);
+  if (!sp.differs || !sp.said) return null;
+  const said = sp.said.toLowerCase();
+  return { said, word, target: sp.target, saidCaps: sp.said, text: `電腦聽你唸成「${said}」，正確是「${word}」` };
+}
+
 // ---- sound names for plain sentences: [label with example word, 注音-ish approximation] ----
 const SN = {
   p: ['p', 'ㄆ'], b: ['b', 'ㄅ（喉嚨要震動）'], t: ['t', 'ㄊ'], d: ['d', 'ㄉ（喉嚨要震動）'], k: ['k', 'ㄎ'], g: ['g', 'ㄍ（喉嚨要震動）'],
@@ -193,6 +202,7 @@ const SUB_ROWS = [
   ['n', 'l', '氣從舌頭兩側出去像「ㄌ」；要氣從鼻子出（捏住鼻子會悶掉）', '捏著鼻子唸 night，聲音應該悶掉。'],
   ['l', 'ɹ', '舌頭捲起來變成 r；要舌尖頂住上牙齦不動', 'light 開頭舌尖用力頂住，感覺舌尖貼著牙齦。'],
   ['ɹ', 'l', '舌尖頂住牙齦像「ㄌ」；要舌頭往後捲、懸空不碰任何地方', '唸 right 時舌尖懸空後捲，千萬不要碰到上顎。'],
+  ['w', 'ɹ', '舌頭捲起來變成 r；要嘴唇先圓成「ㄨ」再快速打開，舌頭放平不要捲', '唸 we 時先把嘴唇嘟成「ㄨ」再打開，舌頭完全不用動。'],
   ['ɹ', 'w', '只有嘴唇圓起像「ㄨ」；要嘴唇圓的同時舌頭往後捲', 'red 的舌頭要先捲起來再發聲。'],
   ['ɪ', 'i', '拉得太長太緊像「一～」；要短、放鬆，嘴角不用力', 'ship 要短，sheep 要長，來回對比。'],
   ['i', 'ɪ', '太短太鬆；要嘴角往兩邊拉開、拉長像「一～」', 'sheep 時微笑拉開嘴角並拖長。'],

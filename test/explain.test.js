@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { respell, respellWord, explain, minimalPairs, plainSound, soundLabel, ART, CONF, DEL, INS } from '../js/explain.js';
+import { heardAs, respell, respellWord, explain, minimalPairs, plainSound, soundLabel, ART, CONF, DEL, INS } from '../js/explain.js';
 import { IPA } from '../js/phonemes.js';
 
 const IPA_CHARS = /[ɔɹɚɝʌɑæɛɪʊəʃʒθðŋɾʔˈˌː]/;
@@ -98,7 +98,7 @@ test('same sound → null; unclear → plain sub; generic fallback uses mouth de
 
 test('common Mandarin-speaker confusions are all hand-covered with fix + 2 minimal pairs', () => {
   const must = [['t', 'd'], ['d', 't'], ['z', 's'], ['s', 'z'], ['f', 'v'], ['v', 'f'], ['ɔ', 'oʊ'], ['oʊ', 'ɔ'], ['m', 'n'], ['n', 'm'],
-    ['θ', 's'], ['ð', 'd'], ['l', 'n'], ['n', 'l'], ['ɹ', 'l'], ['l', 'ɹ'], ['ɪ', 'i'], ['i', 'ɪ'], ['æ', 'ɛ'], ['ʊ', 'u'], ['u', 'ʊ'],
+    ['θ', 's'], ['ð', 'd'], ['l', 'n'], ['n', 'l'], ['ɹ', 'l'], ['l', 'ɹ'], ['w', 'ɹ'], ['ɪ', 'i'], ['i', 'ɪ'], ['æ', 'ɛ'], ['ʊ', 'u'], ['u', 'ʊ'],
     ['v', 'w'], ['dʒ', 'd'], ['d', 'dʒ'], ['ɔɹ', 'ɔ'], ['ɝ', 'ʌ'], ['ɚ', 'ə'], ['aɪ', 'ɑ'], ['n', 'ŋ'], ['ŋ', 'n']];
   for (const [e, h] of must) {
     const x = explain(e, h, { letters: 'x', word: 'test' });
@@ -131,4 +131,17 @@ test('minimal pairs: expected-sound word first, flipped for the reverse', () => 
   assert.deepEqual(minimalPairs('θ', 's')[0], ['think', 'sink']);
   assert.deepEqual(minimalPairs('s', 'θ')[0], ['sink', 'think']);
   assert.equal(minimalPairs('θ', 's').length, 2);
+});
+
+test('heardAs: "we" heard as "ree" (TTS pair + text)', () => {
+  const h = heardAs('we', [row('w', 'ɹ', true), row('i', 'i')]);
+  assert.equal(h.said, 'ree');
+  assert.equal(h.word, 'we');
+  assert.equal(h.text, '電腦聽你唸成「ree」，正確是「we」');
+  assert.doesNotMatch(JSON.stringify(h), IPA_CHARS);
+});
+
+test('heardAs: nothing to compare when correct or when the whole word was dropped', () => {
+  assert.equal(heardAs('go', [row('g', 'g'), row('oʊ', 'oʊ')]), null);
+  assert.equal(heardAs('go', [row('g', '—', true), row('oʊ', '—', true)]), null);
 });

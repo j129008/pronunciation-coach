@@ -13,6 +13,13 @@ export function segmentRange(offTicks, durTicks, rate, len, { pad = 0.12, minLen
   return s1 > s0 ? { s0, s1 } : null;
 }
 
+// Which row (phoneme) is sounding at absolute source time t (seconds)? `only` restricts to one index,
+// otherwise only mispronounced rows ('bad') are considered. Returns -1 if none.
+export function activeIndex(rows, t, only = null) {
+  if (t == null) return -1;
+  return rows.findIndex((r, i) => (only == null ? r.bad : i === only) && Number.isFinite(r.off) && Number.isFinite(r.dur) && t >= r.off / TICKS && t < (r.off + r.dur) / TICKS);
+}
+
 let segAudio = null;
 
 export function stopSeg() {
@@ -20,8 +27,9 @@ export function stopSeg() {
 }
 
 // Resolves (true if something played) when the segment ends or is stopped.
-// opts: {pad, rate} — rate 0.5–1; pitch is preserved by the media element.
-export function playSeg(cap, offTicks, durTicks, { pad, rate = 1 } = {}) {
+// opts: {pad, rate, onTick} — rate 0.5–1 (pitch preserved); onTick(absSec) runs every frame with the position in the
+// original recording, then onTick(null) when playback ends — used to highlight the sound being played.
+export function playSeg(cap, offTicks, durTicks, { pad, rate = 1, onTick } = {}) {
   return new Promise(resolve => {
     if (!cap) return resolve(false);
     const rg = segmentRange(offTicks, durTicks, cap.rate, cap.data.length, pad == null ? undefined : { pad });
@@ -32,11 +40,16 @@ export function playSeg(cap, offTicks, durTicks, { pad, rate = 1 } = {}) {
     a.preservesPitch = a.mozPreservesPitch = a.webkitPreservesPitch = true;
     a.playbackRate = rate;
     let done = false;
-    const fin = ok => { if (done) return; done = true; if (segAudio === a) segAudio = null; URL.revokeObjectURL(url); resolve(ok); };
+    const t0 = rg.s0 / cap.rate;
+    const fin = ok => { if (done) return; done = true; if (segAudio === a) segAudio = null; URL.revokeObjectURL(url); if (onTick) onTick(null); resolve(ok); };
     a.onended = () => fin(true);
     a.onpause = () => fin(true);
     a.onerror = () => fin(false);
     segAudio = a;
-    a.play().catch(() => fin(false));
+    a.play().then(() => {
+      if (!onTick) return;
+      const loop = () => { if (done) return; onTick(t0 + a.currentTime); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
+    }).catch(() => fin(false));
   });
 }
