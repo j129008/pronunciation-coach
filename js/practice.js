@@ -10,6 +10,7 @@ import { encodeWav, captureMic, assess } from './azure.js';
 import { explain, respell, plainSound, heardAs, minimalPairs } from './explain.js';
 import { azureTtsReady, sayIpa, stopClip, targetIpa, heardIpa } from './azuretts.js';
 import { oneLineHint, lowConfidence, LOW_CONF_NOTE, mainError } from './hints.js';
+import { wordFix } from './wordfix.js';
 import { chip, ipaHtml, ipaRow, showIpaTable, handleIpaClick } from './ipaui.js';
 import { userLabel } from './lessons.js';
 
@@ -170,6 +171,36 @@ const spellHtml = (w, wi) => {
   return `<div class="rsp">${esc(ha.text)} ${likeBtn(w, wi)}<br><small>拼法對照：<b class="rs bad">${esc(ha.saidCaps)}</b> vs <b class="rs">${esc(ha.target)}</b>（大寫＝出問題的音節，只是文字對照）</small></div>`;
 };
 const lowConfHtml = r => lowConfidence(r) ? `<div class="lowconf">⚠ ${esc(LOW_CONF_NOTE)}</div>` : '';
+const lowTag = rs => rs.some(lowConfidence) ? ` <span class="lowtag" title="${esc(LOW_CONF_NOTE)}">⚠ 可能是辨識誤差</span>` : '';
+// recording time span of rows a..b (falls back to the whole word)
+function regionTime(w, a, b) {
+  const rs = w.rows.slice(a, b + 1).filter(r => Number.isFinite(r.off) && Number.isFinite(r.dur));
+  if (!rs.length) return { off: w.offset, dur: w.dur };
+  const off = rs[0].off, end = rs[rs.length - 1].off + rs[rs.length - 1].dur;
+  return { off, dur: end - off };
+}
+// the word with the wrong letters marked in place and the correct sound under them
+const fixWordHtml = f => '<div class="fixword">' + f.segments.map(g => !g.bad ? esc(g.text)
+  : `<span class="fl${g.text ? '' : ' gap'}">${g.text ? esc(g.text) : '‸'}<small>${esc(g.sound)}</small></span>`).join('') + '</div>';
+const regionHtml = (wi, w, reg, buttons) => `<div class="fixreg"><div class="fixsay">${esc(reg.sentence)}${lowTag(reg.bad.map(i => w.rows[i]))}</div>
+ <div class="fixhow">👉 ${esc(reg.howto)}</div>${buttons && lastCap && w.et !== 'Omission' ? `<div class="fixbtns"><button class="btn sm" data-abr="${wi},${reg.a},${reg.b}">A/B：標準 → 我的</button><button class="btn sm" data-segr="${wi},${reg.a},${reg.b}">只聽這段（放慢）</button></div>` : ''}</div>`;
+// details hidden under 更多說明: respelling, mouth shapes, IPA, minimal pairs, practice tips, confidence notes
+function moreHtml(w) {
+  const ha = heardAs(w.word, w.rows);
+  let h = ha ? `<div class="rsp">${esc(ha.text)}<br><small>拼法對照：<b class="rs bad">${esc(ha.saidCaps)}</b> vs <b class="rs">${esc(ha.target)}</b>（大寫＝出問題的音節，只是文字對照）</small></div>` : '';
+  for (const r of w.rows) if (r.bad) {
+    const opt = { isFinal: r.isFinal, word: w.word, letters: r.let };
+    const x = explain(r.exp, r.heard, opt), one = oneLineHint(r.exp, r.heard, opt);
+    h += `<div class="morerow"><b>${esc(r.let && r.let !== '·' ? r.let : '')}</b> ${x && one !== x.verdict ? esc(one) : ''}${explainHtml(x, r.exp, r.heard)}${lowConfHtml(r)}</div>`;
+  }
+  return h ? `<details class="more"><summary>更多說明</summary>${h}</details>` : '';
+}
+function fixHtml(w, wi) {
+  if (w.et === 'Omission') return `<li class="fix"><div class="fixword"><span class="fl">${esc(w.word)}</span></div><div class="fixsay">整個字沒唸出來</div><div class="fixbtns"><button class="btn sm" data-std="${wi}">標準</button></div></li>`;
+  const f = wordFix(w);
+  return `<li class="fix">${fixWordHtml(f)}${f.regions.map(reg => regionHtml(wi, w, reg, true)).join('')}
+ <div class="fixbtns">${heardAs(w.word, w.rows) ? likeBtn(w, wi) : `<button class="btn sm" data-std="${wi}">標準</button>`}</div>${moreHtml(w)}</li>`;
+}
 // highlight the sound being played (one phoneme if `only` is given, otherwise any mispronounced one)
 let hlKey = null;
 function setHl(wi, k) {
@@ -216,7 +247,8 @@ async function mineSequence(wi) {
   if (!w || !lastCap) return;
   const k = mainError(w.rows), r = w.rows[k];
   const box = document.getElementById('phint' + wi);
-  if (box) box.innerHTML = r ? `<div class="hint1">💡 ${esc(oneLineHint(r.exp, r.heard, { isFinal: r.isFinal, word: w.word, letters: r.let }))}</div>${lowConfHtml(r)}<small class="muted">播放：你的（放慢）→ 正確（放慢）${heardAs(w.word, w.rows) && (azureTtsReady() || likePair(w)) ? ' → 聽起來像' : ''}</small>` : '<small class="muted">播放：你的（放慢）→ 正確（放慢）</small>';
+  const reg = r && wordFix(w).regions.find(g => g.a <= k && k <= g.b);
+  if (box) box.innerHTML = r ? `${fixWordHtml(wordFix(w))}${reg ? regionHtml(wi, w, reg, false) : ''}<small class="muted">播放：你的（放慢）→ 正確（放慢）${heardAs(w.word, w.rows) && (azureTtsReady() || likePair(w)) ? ' → 聽起來像' : ''}</small>` : '<small class="muted">播放：你的（放慢）→ 正確（放慢）</small>';
   $('myAudio').pause();
   cancelAll();
   const tok = abTok;
@@ -395,14 +427,12 @@ function renderAzure(j) {
   }
   $('azScores').innerHTML = `<div class="azs"><b>Azure 評估</b>　總分 <b>${f(p.PronScore)}</b>・準確度 ${f(p.AccuracyScore)}・流暢度 ${f(p.FluencyScore)}・完整度 ${f(p.CompletenessScore)}・韻律 ${f(p.ProsodyScore)}</div>
  <button id="abAll" class="btn sm">整句 A/B（標準 → 我的）</button>`;
-  const spShown = new Set();
   let h = '';
-  if (top.length) h += '<div class="issues"><ol>' + top.map(x => {
-    const sp = spShown.has(x.wi) ? '' : spellHtml(words[x.wi], x.wi);
-    spShown.add(x.wi);
-    return `<li><b>${esc(x.w)}</b>${sp}${explainHtml(explain(x.r.exp, x.r.heard, { isFinal: x.r.isFinal, word: x.w, letters: x.r.let }), x.r.exp, x.r.heard)}${lowConfHtml(x.r)}
- ${lastCap && words[x.wi].et !== 'Omission' ? `<button class="btn sm" data-abp="${x.wi},${x.ki}">A/B：標準 → 我的</button><button class="btn sm" data-seg="${x.wi},${x.ki}">只聽這段（放慢）</button>` : ''}</li>`;
-  }).join('') + '</ol></div>';
+  // one entry per word (worst first): where the error is, what happened, how to fix it
+  const fixWords = words.map((w, wi) => ({ w, wi }))
+    .filter(({ w }) => w.et !== 'Insertion' && (w.et === 'Omission' || w.rows.some(r => r.bad)))
+    .sort((a, b) => (a.w.score ?? 0) - (b.w.score ?? 0)).slice(0, 5);
+  if (fixWords.length) h += '<div class="issues"><ol>' + fixWords.map(({ w, wi }) => fixHtml(w, wi)).join('') + '</ol></div>';
   else h += '<div class="issues ok">沒有明顯的錯誤音素。</div>';
   $('azIssues').innerHTML = h;
   h = '<div class="wcards">' + words.map((w, i) => {
@@ -434,7 +464,15 @@ function onAzureClick(e) {
   if (t.closest('[data-goipa]')) { env.openIpa(); return; }
   const std = t.closest('[data-std]'), mine = t.closest('[data-mine]'), card = t.closest('.wcard'), ab = t.closest('#abAll');
   const W = azWords;
-  const seg = t.closest('[data-seg]'), like = t.closest('[data-like]');
+  const seg = t.closest('[data-seg]'), like = t.closest('[data-like]'), segr = t.closest('[data-segr]'), abr = t.closest('[data-abr]');
+  if (segr || abr) {
+    const [wi, a, b] = (segr || abr).dataset[segr ? 'segr' : 'abr'].split(',').map(Number), w = W[wi];
+    if (!w || w.et === 'Omission') return;
+    const { off, dur } = regionTime(w, a, b);
+    if (abr) runAB(w.word, off, dur);
+    else if (lastCap) { cancelAll(); playSeg(lastCap, off, dur, { pad: 0.25, rate: 0.5, onTick: tickFor(wi, w) }); }
+    return;
+  }
   if (seg) { const [wi, k] = seg.dataset.seg.split(',').map(Number); playOwnSegment(wi, k); return; }
   if (like) { likeAudio(+like.dataset.like); return; }
   const abp = t.closest('[data-abp]'), abw = t.closest('[data-abw]'), say = t.closest('[data-say]');

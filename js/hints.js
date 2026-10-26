@@ -29,8 +29,8 @@ export function oneLineHint(exp, heard, { isFinal = false, word = '', letters = 
     if (isFinal && !isVowel(e)) return `你把字尾的子音（${letters && letters !== '·' ? letters : '最後一個音'}）吞掉了；中文習慣不收尾，英文一定要把最後的音唸出來，輕輕收住就好`;
   } else if (e !== h) {
     if (HINTS[e + '|' + h]) return HINTS[e + '|' + h];
-    // a consonant (usually the last one) came out as a vowel: you added "uh" after it
-    if (!isVowel(e) && isVowel(h)) return `你在 ${letters && letters !== '·' ? letters : '子音'} 後面多加了一個母音（像多唸了「ㄜ」）；子音唸完就收住，不要再補一個「ㄜ」`;
+    // a final consonant heard as "uh": you added a vowel after it (elsewhere it was swallowed — see wordfix.js)
+    if (isFinal && !isVowel(e) && (h === 'ə' || h === 'ʌ')) return `你在 ${letters && letters !== '·' ? letters : '子音'} 後面多加了一個母音（像多唸了「ㄜ」）；子音唸完就收住，不要再補一個「ㄜ」`;
   }
   const x = explain(exp, heard, { isFinal, word, letters });
   return x ? x.verdict : '';

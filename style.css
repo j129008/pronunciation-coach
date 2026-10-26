@@ -205,3 +205,10 @@ dialog#addDlg{border:0;border-radius:14px;padding:0;width:min(720px,96vw);max-he
   .keys{display:none}
 }
 @media(max-width:420px){.lgrid{grid-template-columns:1fr}}
+.fix{margin:var(--s3) 0}.fixword{font-size:26px;font-weight:600;letter-spacing:.5px;line-height:1.2;margin:2px 0 6px}
+.fl{display:inline-flex;flex-direction:column;align-items:center;color:var(--bad,#e03131);text-decoration:underline wavy;text-underline-offset:4px}
+.fl small{font-size:12px;font-weight:500;color:#1e3a8a;text-decoration:none;background:var(--pri-l,#e7f0ff);border-radius:4px;padding:0 4px;margin-top:3px;letter-spacing:0}
+.fl.gap{text-decoration:none}.fixsay{font-size:16px;font-weight:600;color:#1e293b;margin:4px 0}.fixhow{font-size:14.5px;color:#334155;margin:2px 0 6px}
+.fixbtns{margin:4px 0}.fixreg+.fixreg{border-top:1px dashed #e2c98f;padding-top:6px}
+.lowtag{font-size:12px;font-weight:500;color:#7a4b00;background:#fff3cd;border-radius:4px;padding:0 5px;cursor:help}
+details.more{margin-top:6px;font-size:14px}details.more summary{cursor:pointer;color:#1c7ed6}.morerow{margin:6px 0;padding-top:4px;border-top:1px dotted #e2e8f0}
