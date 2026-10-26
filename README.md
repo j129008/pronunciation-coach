@@ -11,7 +11,9 @@ A single-page, no-build web app for practicing English pronunciation sentence by
 ### Features
 - **Listen** (`🔊 聽`): Google Translate TTS (normal / `慢速` 0.7×) with fallback to browser voices; voice drop-down next to it.
 - **Record & score (default)**: Web Speech API recognition (Chrome/Edge), word-level alignment with colored diff, number/unit/abbreviation normalization, score + tips. After each take, `▶ 播放我的錄音` replays your whole recording and `↺ 重錄` records it again without leaving the item.
-- **Azure Pronunciation Assessment (optional)**: accuracy / fluency / completeness / prosody, per-phoneme IPA comparison. In the word cards, click a phoneme in the `標準` row to hear an example word then the word, or in the `你的` row to hear only your own slice of audio, with plain-language Chinese hints and letter↔sound mapping.
+- **Azure Pronunciation Assessment (optional)**: accuracy / fluency / completeness / prosody, per-phoneme IPA comparison. In the word cards, click a phoneme in the `標準` row to hear an example word then the word, or in the `你的` row to hear only your own slice of audio (with 120 ms padding, slowed by `我的錄音速度` 0.5x / 0.6x (default) / 0.75x / 1x without changing pitch; `標準示範速度` sets the TTS speed), with plain-language Chinese hints and letter↔sound mapping.
+- **“What did I actually say?”** (Azure mode): each mispronounced word shows a respelling of the target vs. what you sounded like (e.g. `drohv` → `jroff`). Every wrong phoneme gets a Traditional Chinese articulation diff (what your tongue/lips/voicing did vs. should do), a one-line drill and minimal-pair words you can click to hear (day/jay, dough/Joe …). The table covers common Mandarin-speaker confusions (t/d, s/z, f/v, v/w, ɔ/oʊ, m/n and n/ŋ endings, θ/s, ð/d, l/n, r/l, ɪ/i, æ/ɛ, ʊ/u, …) with a generic fallback built from per-sound articulation notes.
+- **A/B compare**: `⇄` buttons per word and per phoneme (and in the “🎯 你這句最需要改的音” list) play the standard word, a short pause, then your own slice; tick `循環播放 A/B` to loop, `■ 停止播放` to stop.
 - **Progress tracking**: per-item attempts / best / last / history, statuses (new / needs work / good / mastered / due for review), lesson-grouped sidebar, dashboard with streak, smart `▶ 下一題` (1 review : 2 new), weak-phoneme stats.
 - Keyboard: `Space` record/stop, `N` next, `R` listen. `💾 備份 / 還原進度` exports / imports progress JSON.
 - Responsive: on phones the item list becomes a drawer opened with `☰`.
@@ -24,7 +26,7 @@ python3 -m http.server 8000
 Microphone access requires `localhost` or HTTPS. The app uses ES modules, so it must be served over HTTP (as above); opening `index.html` via `file://` does not work.
 
 ### Code layout
-`app.js` (entry) + `js/`: `data.js` (load/validate items), `normalize.js` + `align.js` (text normalizer, alignment, tips), `phonemes.js` (IPA hints, Azure word → phoneme rows), `azure.js` (mic capture, WAV, REST call), `tts.js`, `playback.js` (segment playback), `progress.js` (localStorage progress, smart pick), `ui.js` (DOM).
+`app.js` (entry) + `js/`: `data.js` (load/validate items), `normalize.js` + `align.js` (text normalizer, alignment, tips), `phonemes.js` (IPA hints, Azure word → phoneme rows), `explain.js` (respelling, articulation diffs, minimal pairs), `azure.js` (mic capture, WAV, REST call), `tts.js`, `playback.js` (segment playback), `progress.js` (localStorage progress, smart pick), `ui.js` (DOM).
 
 ### Tests
 ```bash
@@ -68,6 +70,8 @@ MIT
 - **聽**（`🔊 聽`）：Google 翻譯語音（正常／勾選 `慢速` 為 0.7×），失敗時改用瀏覽器內建語音，旁邊的下拉選單可選語音。
 - **錄音評分（預設）**：Web Speech API 語音辨識（Chrome/Edge），逐字對齊並以顏色標示錯誤，自動處理數字、單位、縮寫，給分數與中文建議，錄完後 `▶ 播放我的錄音` 可聽完整錄音，`↺ 重錄` 可在同一題重新錄。
 - **Azure 發音評估（選用）**：準確度、流暢度、完整度、韻律，以及每個音素的比對。在單字卡中點 `標準` 列的音素會先播示範字再播該單字，點 `你的` 列的音素只播你唸的那一小段，附白話中文說明與字母對應。
+- **「我到底唸成什麼？」**（Azure 模式）：每個唸錯的字會顯示「目標讀法」與「你聽起來像」的拼音對照（例如 `drohv` → `jroff`）；每個錯誤音素附上繁體中文的發音動作對照（你的舌頭／嘴唇／聲帶做了什麼、應該怎麼做）、一句練習口訣，以及可點擊試聽的最小對比字（day/jay、dough/Joe…）。涵蓋華語使用者常見混淆（t/d、s/z、f/v、v/w、ɔ/oʊ、m/n 與 n/ŋ 字尾、θ/s、ð/d、l/n、r/l、ɪ/i、æ/ɛ、ʊ/u…），沒收錄的組合會用各音的發音說明自動產生。
+- **A/B 對照**：單字與音素旁的 `⇄` 鈕（以及「🎯 你這句最需要改的音」清單）會先播標準單字、停一下、再播你的那一段；勾選 `循環播放 A/B` 可重複，`■ 停止播放` 停止。播放速度可用 `我的錄音速度`（0.5x／0.6x 預設／0.75x／1x，音高不變）與 `標準示範速度` 調整。
 - **進度追蹤**：每題練習次數、最高分、最近分數、歷史；狀態（未練／要加強／還不錯／已熟練／待複習）；依課程分組的側欄；儀表板與連續天數；智慧 `▶ 下一題`（1 題複習：2 題新題）；常錯音統計。
 - 快捷鍵：`Space` 錄音／停止、`N` 下一題、`R` 聽。`💾 備份 / 還原進度` 可匯出／匯入進度 JSON。手機上題目清單會收進 `☰` 抽屜。
 
