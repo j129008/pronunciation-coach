@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pronunciation Coach 英文發音教練</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<header><button id="menuBtn" class="sec">☰</button><h1>🎤 發音練習</h1><div class="dash"><div id="bar"></div><div id="stats"></div></div></header>
+<div class="layout">
+<aside>
+<div class="filters">
+<div id="chips"><button class="chip on" data-st="all">全部<em></em></button><button class="chip" data-st="new">未練<em></em></button><button class="chip" data-st="weak">要加強<em></em></button><button class="chip" data-st="fair">還不錯<em></em></button><button class="chip" data-st="good">已熟練<em></em></button><button class="chip" data-st="due">待複習<em></em></button></div>
+<div id="tchips"><button class="chip on" data-t="">全部類型</button><button class="chip" data-t="sentence">句子</button><button class="chip" data-t="vocab">單字</button><button class="chip" data-t="extra">補充</button></div>
+<div class="srow"><input id="q" placeholder="🔍 搜尋英文 / 中文 / #編號"><input id="jid" placeholder="id" style="width:64px"><button id="jump" class="sec">跳</button></div>
+<small id="lcount"></small>
+</div>
+<div id="vlist"><div id="vinner"></div></div>
+</aside>
+<main>
+<div class="card" id="cur">
+<div id="meta"></div><span id="reason" style="display:none"></span>
+<div class="target" id="tgt">按「▶ 下一題」開始</div><div class="ipa" id="ipa"></div><div class="zh" id="zh"></div>
+<div class="ctrl">
+<button id="listen" class="ghost">🔊 聽 <kbd>R</kbd></button><label><input type="checkbox" id="slow"> 慢速</label><select id="voice" title="語音"></select>
+<button id="rec" class="rec">● 錄音並評分</button><kbd style="background:#eee">Space</kbd><span id="modeBadge" style="color:#fff;border-radius:10px;padding:2px 8px;font-size:12px"></span>
+<span class="sp"></span>
+<button id="prev" class="sec" title="上一個">◀</button><button id="next" class="sec" title="下一個（順序）">▶</button><button id="rand" class="sec" title="隨機">🎲</button>
+<button id="smart" class="primary">▶ 下一題 <kbd>N</kbd></button>
+</div>
+<div id="status"></div><div id="interim" style="color:#888"></div>
+<audio id="myAudio" controls style="display:none;margin-top:8px;width:100%"></audio>
+<div id="summary"></div>
+</div>
+<div class="card" id="result" style="display:none">
+<div>比對分數：<span class="score" id="score"></span></div>
+<div id="words"></div><div id="heardAll" style="margin-top:6px"><small></small></div>
+<div id="tips" style="margin-top:8px"></div><div id="azure"></div>
+<small>綠＝正確、紅＝錯（下方小字為辨識到的字）、灰＝漏掉、黃＝多出來的字</small>
+</div>
+<div class="card">
+<details><summary>🗣️ 我的常錯音（Azure 音素統計）</summary><div id="confList"></div><button id="clearConf" class="sec">清除</button></details>
+<details><summary>📋 弱點字紀錄</summary><div id="weakList"></div><button id="clearWeak" class="sec">清除紀錄</button></details>
+<details><summary>💾 備份 / 還原進度</summary><button id="exportBtn" class="sec">⬇ 匯出進度 JSON</button> <button class="sec" onclick="forgetData()">📂 更換練習資料</button><label class="chip" style="cursor:pointer">⬆ 匯入<input type="file" id="importFile" accept=".json" style="display:none"></label></details>
+<details><summary>⚙️ 進階：Azure 發音評估（音素級分數）</summary>
+<p><small>輸入 Azure Speech 金鑰與區域（如 eastasia）。只存在本機 localStorage。</small></p>
+Key <input id="azKey" type="password" size="34"> Region <input id="azRegion" size="10">
+<label><input type="checkbox" id="azOn"> 啟用</label><button id="azSave">儲存</button>
+</details>
+</div>
+</main></div>
+<div id="loadScreen"><div class="box"><h2>📂 載入練習資料 Load practice items</h2>
+<p>找不到 <code>data/items.json</code>。請選擇一個練習題 JSON 檔（會保存在這個瀏覽器的 IndexedDB，不會上傳）。<br><small>No <code>data/items.json</code> found. Pick a JSON file; it is stored only in this browser.</small></p>
+<p><input type="file" id="dataFile" accept=".json,application/json"></p>
+<p><button id="loadSample">試用範例資料 Try sample data</button></p>
+<p><small>格式 Format：<code>[{"e":"English text","t":"sentence|vocab|extra","z":"中文","x":"example","p":"IPA","l":"L001"}]</code>，詳見 README。</small></p>
+<p id="loadErr" style="color:#b91c1c"></p></div></div>
+<script src="app.js"></script></body></html>

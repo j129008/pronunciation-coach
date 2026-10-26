@@ -1,0 +1,7 @@
+[
+  {"i": 1, "t": "sentence", "e": "Could you pass me the salt, please?", "z": "可以請你把鹽遞給我嗎？", "l": "Sample 01"},
+  {"i": 2, "t": "sentence", "e": "The library closes at eight on weekdays.", "z": "圖書館平日八點關門。", "l": "Sample 01"},
+  {"i": 3, "t": "vocab", "e": "Umbrella", "z": "n. 雨傘", "x": "Don't forget your umbrella; it might rain later.", "p": "ʌmbɹˈɛlə", "l": "Sample 02"},
+  {"i": 4, "t": "vocab", "e": "Thoroughly", "z": "adv. 徹底地", "x": "Please read the instructions thoroughly.", "p": "θˈɜːɹoʊli", "l": "Sample 02"},
+  {"i": 5, "t": "extra", "e": "She walked three miles along the river this morning.", "z": "她今天早上沿著河走了三英里。", "l": "Sample 03"}
+]

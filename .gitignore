@@ -1,0 +1,7 @@
+# private practice data & secrets
+data/items.json
+data/*.private.json
+*.key
+.env
+config.local.*
+.DS_Store
