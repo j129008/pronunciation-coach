@@ -17,11 +17,21 @@ export function migrate(byId) {
   localStorage.progMigrated = '1';
 }
 
+// spaced repetition: the more consecutive good (>=85) takes, the longer until the item is due again
+export function srDays(p) {
+  const h = p.h && p.h.length ? p.h : [p.l];
+  let c = 0;
+  for (let i = h.length - 1; i >= 0 && h[i] >= 85; i--) c++;
+  return c <= 1 ? 3 : c === 2 ? 7 : c === 3 ? 14 : 30;
+}
+// how long past its review date a good item is (ms; negative = not due yet)
+export const overdueMs = (p, now = Date.now()) => now - p.d - srDays(p) * DAY;
+
 export function statusOf(id, now, prog = PROG) {
   const p = prog[id];
   now = now || Date.now();
   if (!p || !p.a) return 'new';
-  if (p.l >= 85) return (now - p.d >= 3 * DAY) ? 'due' : 'good';
+  if (p.l >= 85) return overdueMs(p, now) >= 0 ? 'due' : 'good';
   if (p.l >= 70) return 'fair';
   return 'weak';
 }
@@ -41,10 +51,24 @@ export function recordAttempt(id, score, now = Date.now()) {
   const k = dkey(now);
   days[k] = (days[k] || 0) + 1;
   localStorage.days = JSON.stringify(days);
+  const ds = lsGet('dayScores', {});
+  ds[k] = { n: (ds[k] ? ds[k].n : 0) + 1, sum: (ds[k] ? ds[k].sum : 0) + score };
+  localStorage.dayScores = JSON.stringify(ds);
   return { score, prevBest, p };
 }
 
 export function todayCount(now = Date.now()) { return lsGet('days', {})[dkey(now)] || 0; }
+
+// last n calendar days (oldest first): [{key, n, avg}] — pure given the two stored maps
+export function lastDays(days, scores, n = 14, now = Date.now()) {
+  const out = [];
+  for (let k = n - 1; k >= 0; k--) {
+    const key = dkey(now - k * DAY), s = scores[key];
+    out.push({ key, n: days[key] || 0, avg: s && s.n ? Math.round(s.sum / s.n) : null });
+  }
+  return out;
+}
+export const dayHistory = (n = 14) => lastDays(lsGet('days', {}), lsGet('dayScores', {}), n);
 
 export function streak() {
   const days = lsGet('days', {});
@@ -88,7 +112,7 @@ export function saveConf(c) { localStorage.phConf = JSON.stringify(c); }
 export function clearConf() { localStorage.removeItem('phConf'); }
 
 // backup / restore
-const BACKUP_KEYS = ['progress', 'days', 'weakWords', 'weakItems', 'phConf'];
+const BACKUP_KEYS = ['progress', 'days', 'dayScores', 'weakWords', 'weakItems', 'phConf'];
 export function exportProgress() {
   const o = { version: 1, exported: new Date().toISOString() };
   for (const k of BACKUP_KEYS) o[k] = lsGet(k, {});
