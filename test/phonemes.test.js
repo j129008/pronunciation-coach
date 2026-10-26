@@ -60,3 +60,8 @@ test('segmentRange rejects missing/invalid timing instead of throwing later', ()
   assert.equal(segmentRange(1, -5, 16000, 100), null);
   assert.equal(segmentRange(1, 1, 0, 100), null);
 });
+
+test('segmentRange default padding is 120 ms each side', () => {
+  const rg = segmentRange(1 * TICKS, 0.5 * TICKS, 1000, 10000);
+  assert.deepEqual(rg, { s0: 880, s1: 1620 });
+});
