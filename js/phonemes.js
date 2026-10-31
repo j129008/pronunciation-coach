@@ -99,5 +99,7 @@ export function analyzeWord(w){const wa=w.PronunciationAssessment||w;const et=wa
   // recognizer confidence: NBest score of the sound we report as heard, and of the expected sound (null = not listed)
   const nbScore=p=>{const x=nb.find(c=>c.Phoneme===p);return x?x.Score:null};
   return {exp:ph.Phoneme,heard,score:s,bad:bad&&heard!==ph.Phoneme,isFinal:i===phs.length-1,off:ph.Offset,dur:ph.Duration,heardConf:nb.length?nbScore(heard):null,expConf:nb.length?nbScore(ph.Phoneme):null}});
+ // Unstressed schwa said as /ɪ/ (de-, re-, be-: deserve, return) is a valid dictionary variant, not an error
+ rows.forEach(r=>{if(r.bad&&ipaNorm(r.exp)==='ə'&&['ɪ','i'].includes(ipaNorm(r.heard)))r.bad=false});
  const lt=alignLetters(w.Word,rows.map(r=>r.exp));rows.forEach((r,i)=>r.let=lt[i]);
  return {word:w.Word,et,score:wa.AccuracyScore,rows,offset:w.Offset,dur:w.Duration}}

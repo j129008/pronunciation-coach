@@ -80,3 +80,11 @@ test('activeIndex finds the bad phoneme sounding at time t (for highlighting)', 
   assert.equal(activeIndex(rows, null), -1);
   assert.equal(activeIndex([{ bad: true }], 1), -1); // missing timing
 });
+
+test('schwa heard as ɪ (deserve) is not flagged', () => {
+  const w = analyzeWord({ Word: 'deserve', PronunciationAssessment: { ErrorType: 'Mispronunciation' }, Phonemes: [
+    { Phoneme: 'd', PronunciationAssessment: { AccuracyScore: 95 } },
+    { Phoneme: 'ə', PronunciationAssessment: { AccuracyScore: 20, NBestPhonemes: [{ Phoneme: 'ɪ', Score: 90 }, { Phoneme: 'ə', Score: 20 }] } },
+    { Phoneme: 'z', PronunciationAssessment: { AccuracyScore: 95 } }] });
+  assert.equal(w.rows[1].bad, false);
+});
