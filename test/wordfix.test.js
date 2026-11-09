@@ -59,7 +59,7 @@ test('separate errors far apart stay separate regions; order follows the word', 
   const w = mk('develop', [['d', 'ð', 1], ['ɪ'], ['v'], ['ɛ'], ['l'], ['ə'], ['p', '—', 1]]);
   assert.deepEqual(wordFix(w).regions.map(r => r.sentence), ['d 唸成了 th', '字尾 p 沒唸出來']);
   const ship = mk('ship', [['ʃ'], ['ɪ', 'i', 1], ['p', '—', 1]]);
-  assert.deepEqual(wordFix(ship).regions.map(r => r.sentence), ['ship：i 唸成了 ee，p 沒唸出來']);
+  assert.deepEqual(wordFix(ship).regions.map(r => r.sentence), ['ship：i 唸成了長的ㄧ（該唸短而輕的ㄧ），p 沒唸出來']);
 });
 
 test('no IPA symbols leak into the sentence or how-to text', () => {

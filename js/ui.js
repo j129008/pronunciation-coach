@@ -6,8 +6,10 @@ import { initAdd, renderAddLessons } from './addui.js';
 import * as P from './progress.js';
 import { fillVoices } from './tts.js';
 import { initIpa } from './ipaui.js';
-import { initPractice, showItem, stopAll, stdRate, updBadge } from './practice.js';
-import { parseRoute, tabOf } from './router.js';
+import { initPractice, showItem, stopAll, stdRate, updBadge, openDrill, closeDrill, drillOpen, drillList, recKey } from './practice.js';
+import { refFor } from './stress.js';
+import * as WQ from './wordqueue.js';
+import { parseRoute, routeHash, tabOf } from './router.js';
 import { App, setItems, lessonTitle, sessionSize, status } from './state.js';
 import { lessonSession, summarize, WHY } from './session.js';
 import * as V from './views.js';
@@ -31,7 +33,7 @@ export function showLoadScreen() {
 export function hideLoadScreen() { $('loadScreen').style.display = 'none'; }
 
 const go = hash => { if (location.hash === hash) render(); else location.hash = hash; };
-const VIEWS = { today: 'v-today', library: 'v-library', lesson: 'v-lesson', stats: 'v-stats', settings: 'v-settings', practice: 'v-practice', done: 'v-done' };
+const VIEWS = { today: 'v-today', library: 'v-library', lesson: 'v-lesson', stats: 'v-stats', settings: 'v-settings', practice: 'v-practice', done: 'v-done', words: 'v-words' };
 
 // ---- practice context (what "next" means) ----
 const curId = () => (App.ctx ? App.ctx.ids[App.ctx.idx] : null);
@@ -113,6 +115,28 @@ function onAttempt(item, r) {
   saveSession();
 }
 
+// ---- 要練的字 run: walk the whole queue, one word (in its sentence) at a time ----
+function openWordEntry(id, w) {
+  if (!App.byId.has(id)) return;
+  if (!(App.ctx && curId() === id)) App.ctx = { ids: [id], idx: 0, returnTo: '#/words', session: false };
+  go(routeHash({ name: 'practice', id, word: w }));
+}
+function startWordRun() {
+  const list = WQ.sortQueue(WQ.loadQueue()).filter(a => App.byId.has(a.id)).map(a => ({ id: a.id, w: a.w }));
+  if (!list.length) return;
+  App.wordRun = { list, idx: 0 };
+  openWordEntry(list[0].id, list[0].w);
+}
+// drill 下一個字: true when the run took over navigation
+function nextWord(item, w) {
+  const run = App.wordRun, e = run && run.list[run.idx];
+  if (!e || e.id !== item.i || WQ.wordKey(e.w) !== WQ.wordKey(w)) return false;
+  run.idx++;
+  if (run.idx >= run.list.length) { App.wordRun = null; go('#/words'); return true; }
+  openWordEntry(run.list[run.idx].id, run.list[run.idx].w);
+  return true;
+}
+
 // ---- router ----
 let lastHash = null;
 function render() {
@@ -141,7 +165,14 @@ function render() {
         showCurrent();
       } else if (!App.ctx) return go('#/today');
       else if (r.id == null || document.body.dataset.shown !== String(curId())) showCurrent();
+      // 單字練習 for one word of this sentence (#/practice/<id>/word/<word>)
+      if (r.word && App.ctx) {
+        const d = App.byId.get(curId());
+        history.replaceState(null, '', routeHash({ name: 'practice', id: d.i, word: r.word }));
+        openDrill(d, r.word, drillList(d, r.word));
+      } else if (drillOpen()) closeDrill();
       break;
+    case 'words': V.renderWords(); break;
     default: break;
   }
   if (r.name !== 'practice') delete document.body.dataset.shown;
@@ -197,7 +228,13 @@ export function startApp(items) {
     if (saved.ids.length && saved.idx < saved.ids.length) App.session = saved;
   }
   App.act = { openItem, startSession, resumeSession };
-  initPractice({ onAttempt, nextLabel, lessonTitle, openIpa: () => go('#/stats/ipa') });
+  initPractice({
+    onAttempt, nextLabel, lessonTitle, openIpa: () => go('#/stats/ipa'),
+    refIpa: w => refFor(w, App.items),
+    openWord: (id, w) => go(routeHash({ name: 'practice', id, word: w })),
+    closeWord: id => { App.wordRun = null; go(routeHash({ name: 'practice', id })); },
+    nextWord,
+  });
   initIpa({ stdRate });
   initAdd({ onSave: saveLesson, onDeleteLesson: removeLesson, onExport: exportUser });
   refreshLessons();
@@ -221,6 +258,9 @@ export function startApp(items) {
       case 'ltab': App.tabs[decodeURIComponent(location.hash.replace('#/lesson/', ''))] = d.tab; App.rowLimit = 100; render(); break;
       case 'lesson-start': { const l = App.catalog.byKey.get(d.key); if (l) startSession(lessonSession(l, App.items, status, sessionSize())); break; }
       case 'open-ipa': go('#/stats/ipa'); break;
+      case 'drill': App.wordRun = null; openWordEntry(+d.id, d.w); break;
+      case 'word-run': startWordRun(); break;
+      case 'unqueue': WQ.saveQueue(WQ.removeWord(WQ.loadQueue(), +d.id, d.w)); render(); break;
       default: break;
     }
   });
@@ -232,7 +272,7 @@ export function startApp(items) {
     if (document.body.dataset.view !== 'practice') return;
     if (e.target.matches && e.target.matches('input,select,textarea,button') && e.code === 'Space') return;
     if (e.target.matches && e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.code === 'Space') { e.preventDefault(); $('rec').click(); }
+    if (e.code === 'Space') { e.preventDefault(); recKey(); }
     else if (e.key === 'n' || e.key === 'N') next();
     else if (e.key === 'r' || e.key === 'R') $('listen').click();
   });

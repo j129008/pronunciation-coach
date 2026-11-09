@@ -28,7 +28,10 @@ Labels are messy (`L162 (2026/10/22)`, several joined by `; `, `課前練習 L16
 - **Hear yourself**: `播放我的錄音`, `重錄`; clicking your phoneme plays your whole word slowed (0.5x–1x, pitch kept) and highlights the wrong sound; `只聽這段（放慢）`; A/B compare (standard → pause → yours, loopable). **我的** on a word card plays your whole word slowed (0.6x, pitch kept, 0.3 s padding) → the correct word slowed → the heard-as version, with a one-line Chinese hint for the main error (d/th, th/s, v/b, r/l, i/ee, a/e, dropped final consonant, added vowel) and a warning when Azure's phoneme confidence is low (possible recognizer artifact).
 - **Learn IPA gradually**: every IPA symbol has a tooltip card (注音 approximation, example words, mouth tip, what it is confused with). The 音標教學 panel lists all sounds (missed ones first) and has a 10-question quiz. Switch symbol chips in tables/explanations on or off there.
 - **Article import** (`加入文章`): paste text or drop `.txt`/`.md`, label it (e.g. `L045 2026/10/28 Job interview`), fix the split preview (edit / merge / delete), save. Stored in IndexedDB beside — never inside — your data file; exportable and deletable per lesson.
-- Keyboard in practice: `Space` record/stop, `N` next, `R` listen.
+- **Word practice (單字練習)**: after a sentence is scored, 「單獨練唸錯的字」 / 「單練這個字」 opens a panel on the same screen (`#/practice/<id>/word/<word>`) with the sentence shown and the word highlighted — record only that word, get it assessed (Azure: ≥ 80 and no wrong sounds; Web Speech: the word is recognized), retry until OK, then 下一個字. Every mispronounced word is also saved with its sentence in a **要練的字** queue (localStorage, included in backup) — see it on 今天 or at `#/words` and walk through it one word at a time; a word leaves the queue once practised OK.
+- **Re-do a bad take**: while recording, 「重來（這次不算）」 or `Esc` throws the take away (it is never sent for scoring) and starts recording again right away; 「取消」 throws it away and stops. Works for sentences and word practice.
+- **Readable "唸成了" lines**: vowels are named in 注音 (`e 應該唸短而輕的ㄧ，你唸成了ㄝ`; /ɪ/ = 短而輕的ㄧ, /i/ = 長的ㄧ) and two sides that look the same are never printed. When a reference pronunciation is known (the vocab item's `p`, or a small built-in list such as prefer /prɪˈfɝ/), the how-to marks 輕讀／重音 and where the stress is.
+- Keyboard in practice: `Space` record/stop, `Esc` re-do the take while recording, `N` next, `R` listen.
 
 ### Run
 ```bash
@@ -61,7 +64,7 @@ Schema: a JSON array (or `{"items": [...]}`) of objects:
 Keys live **only in your browser's localStorage** and go only to `*.stt.speech.microsoft.com`. For a local convenience you may create an untracked `config.local.js` that seeds `localStorage` (it is git-ignored together with `.env`, `*.key`, `data/items.json`); never commit keys or practice data.
 
 ### Code layout
-`app.js` (entry) + `js/`: `library.js` (lesson catalog from labels, search, filters), `session.js` (daily session), `router.js`, `state.js`, `ui.js` (shell: router, sessions, wiring), `views.js` (今天/課程/統計/完成), `practice.js` (practice screen, recording, results), `progress.js` (localStorage progress, spaced repetition, history), `data.js`, `lessons.js` + `sentences.js` + `addui.js` (article import), `normalize.js` + `align.js` (text alignment), `phonemes.js` + `explain.js` (phoneme analysis, plain explanations), `ipa.js` + `ipaui.js` (IPA learning), `azure.js`, `tts.js`, `playback.js`, `util.js`.
+`app.js` (entry) + `js/`: `library.js` (lesson catalog from labels, search, filters), `session.js` (daily session), `router.js`, `state.js`, `ui.js` (shell: router, sessions, wiring), `views.js` (今天/課程/統計/完成), `practice.js` (practice screen, recording, results), `progress.js` (localStorage progress, spaced repetition, history), `data.js`, `lessons.js` + `sentences.js` + `addui.js` (article import), `normalize.js` + `align.js` (text alignment), `phonemes.js` + `explain.js` + `wordfix.js` + `stress.js` (phoneme analysis, plain explanations, stress), `recorder.js` (one take at a time, discard/restart), `drill.js` + `wordqueue.js` (word practice, 要練的字 queue), `ipa.js` + `ipaui.js` (IPA learning), `azure.js`, `tts.js`, `playback.js`, `util.js`.
 
 ### Tests
 ```bash
@@ -99,7 +102,10 @@ MIT
 - **聽自己**：`播放我的錄音`、`重錄`；點「你的」音素會慢速播放整個字（0.5x–1x，音高不變）並標出唸錯的音；`只聽這段（放慢）`；A/B 對照（標準 → 停一下 → 你的，可循環）。單字卡的 **我的**：放慢播放你唸的整個字（0.6x、音高不變、前後留 0.3 秒）→ 正確發音（放慢）→ 電腦聽到的版本，並用一句話說明主要錯誤（d/th、th/s、v/b、r/l、i/ee、a/e、字尾子音吞掉、多加母音）；Azure 對音素信心低時會提醒可能是辨識誤差。
 - **慢慢學音標**：每個音標都有提示卡（注音近似、示範字、嘴型、容易跟哪個音搞混）；音標教學面板列出全部英文音（常錯的排最前面）並有 10 題小測驗；也可在面板中開關表格與說明旁的音標標籤。
 - **加入文章**：貼上文字或拖入 `.txt`／`.md`，填課程名稱（如 `L045 2026/10/28 Job interview`），在預覽修正拆句（改字、合併、刪除）後儲存。存在 IndexedDB，與練習資料分開；可匯出、可整課刪除。
-- 練習中的快捷鍵：`Space` 錄音／停止，`N` 下一題，`R` 聽示範。
+- **單字練習**：句子評分後按「單獨練唸錯的字」或某個字的「單練這個字」，同一個畫面會開出單字練習（網址 `#/practice/<id>/word/<字>`），上方顯示原句並標出這個字；只錄這一個字、評分，不 OK 就再錄，OK 後按「下一個字」。唸錯的字也會連同原句存進 **要練的字**（存在瀏覽器 localStorage，備份會一起匯出），可在「今天」或 `#/words` 一個字一個字練，練到 OK 就移除。
+- **錄到一半唸錯**：錄音中按「重來（這次不算）」或 `Esc`，這次錄音直接丟掉、不送去評分，並立刻重新開始錄；「取消」則丟掉並停止。句子與單字練習都適用。
+- **看得懂的說明**：母音用注音描述（`e 應該唸短而輕的ㄧ，你唸成了ㄝ`；/ɪ/＝短而輕的ㄧ、/i/＝長的ㄧ），不會再出現「e 唸成了 e」這種兩邊一樣的句子；知道標準發音時（單字題的 `p` 或內建的常見字，如 prefer /prɪˈfɝ/）會標出輕讀／重音。
+- 練習中的快捷鍵：`Space` 錄音／停止，`Esc` 錄音中重來，`N` 下一題，`R` 聽示範。
 
 ### 執行
 ```bash

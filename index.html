@@ -17,6 +17,7 @@
   <div class="page-h"><h1>今天練什麼</h1><span id="todayDate" class="muted"></span></div>
   <div class="card hero" id="hero"></div>
   <div class="statrow" id="todayStats"></div>
+  <div class="card" id="todayWords" hidden></div>
   <h2>最近的課程</h2>
   <div class="lgrid" id="todayLessons"></div>
 </div></section>
@@ -32,6 +33,13 @@
 
 <section class="view" id="v-lesson" hidden><div class="page" id="lessonPage"></div></section>
 
+<!-- 要練的字 -->
+<section class="view" id="v-words" hidden><div class="page narrow">
+  <div class="page-h"><h1>要練的字</h1><a class="btn link" href="#/today">← 今天</a></div>
+  <p class="muted">句子評分時唸錯的字會自動放進來，並記住它出現的句子；單獨練到 OK 就會移除。只存在這個瀏覽器。</p>
+  <div id="wordsBody"></div>
+</div></section>
+
 <!-- 統計 -->
 <section class="view" id="v-stats" hidden><div class="page">
   <div class="page-h"><h1>統計</h1></div>
@@ -40,7 +48,7 @@
   <div class="card"><h2>掌握度</h2><div id="masteryBar"></div></div>
   <div class="card"><h2>常錯的音</h2><div id="weakSounds"></div>
     <details><summary>詳細對照表</summary><div id="confList"></div><button id="clearConf" class="btn sm">清除紀錄</button></details></div>
-  <div class="card"><h2>常錯的字</h2><div id="weakList"></div><button id="clearWeak" class="btn sm">清除紀錄</button></div>
+  <div class="card"><h2>常錯的字</h2><p><a href="#/words">→ 一個字一個字練（要練的字）</a></p><div id="weakList"></div><button id="clearWeak" class="btn sm">清除紀錄</button></div>
   <div class="card"><h2>最需要加強的句子</h2><div id="weakItemsList"></div></div>
   <div class="card" id="ipaWrap"><h2>音標教學</h2>
     <details id="ipaPanel"><summary>展開全部英文音標與小測驗</summary>
@@ -83,9 +91,20 @@
         <label class="check"><input type="checkbox" id="slow"> 慢速</label>
       </div>
       <div class="recwrap"><button id="rec" class="rec-big">開始錄音</button></div>
-      <div class="actions center"><button id="playMine" class="btn" hidden>播放我的錄音</button><button id="reRec" class="btn" hidden>重錄</button></div>
+      <div class="actions center"><button id="playMine" class="btn" hidden>播放我的錄音</button><button id="reRec" class="btn" hidden>重錄</button><button id="recCancel" class="btn" hidden title="丟掉這次錄音，不評分">取消</button></div>
       <div id="status" class="status"></div><div id="interim" class="muted"></div>
       <audio id="myAudio" controls hidden></audio>
+    </div>
+
+    <div id="drill" class="card drill" hidden>
+      <div class="drill-h"><b>單字練習</b><span id="drillCount" class="muted"></span><button id="drillClose" class="btn link">← 回到整句</button></div>
+      <div id="drillCtx" class="drill-ctx"></div>
+      <div id="drillWord" class="drill-word"></div>
+      <div class="actions center"><button id="drillListen" class="btn">聽這個字</button><button id="drillRec" class="rec-big">錄這個字</button></div>
+      <div class="actions center"><button id="drillRetry" class="btn" hidden title="丟掉這次錄音、不送去評分，馬上重新開始（Esc）">重來（這次不算）</button><button id="drillCancel" class="btn" hidden>取消</button><button id="drillMine" class="btn" hidden>聽我的</button></div>
+      <div id="drillStatus" class="status"></div><div id="drillInterim" class="muted"></div>
+      <div id="drillRes"></div>
+      <div class="pnav"><span></span><button id="drillNext" class="btn">下一個字</button></div>
     </div>
 
     <div id="result" class="result" hidden>
@@ -96,7 +115,7 @@
         <div id="azScores"></div>
         <p class="muted legend">綠＝正確、紅＝錯（下方小字為辨識到的字）、灰＝漏掉、黃＝多出來的字</p>
       </details>
-      <details class="rsec" id="secIssues" open><summary>主要問題</summary><div id="tips"></div><div id="azIssues"></div></details>
+      <details class="rsec" id="secIssues" open><summary>主要問題</summary><div id="drillBar"></div><div id="tips"></div><div id="azIssues"></div></details>
       <details class="rsec" id="secCards"><summary>逐音比對</summary>
         <div id="abTools" class="abtools" hidden>
           <label>我的錄音速度 <select id="segRate"><option value="0.5">0.5x</option><option value="0.6" selected>0.6x</option><option value="0.75">0.75x</option><option value="1">1x</option></select></label>
@@ -108,7 +127,7 @@
     </div>
 
     <div class="pnav"><button id="prev" class="btn">上一題</button><button id="next" class="btn primary">下一題</button></div>
-    <p class="muted keys">快捷鍵：空白鍵＝錄音／停止，N＝下一題，R＝聽示範</p>
+    <p class="muted keys">快捷鍵：空白鍵＝錄音／停止，Esc＝錄音中重來（這次不算），N＝下一題，R＝聽示範</p>
   </div>
 </section>
 

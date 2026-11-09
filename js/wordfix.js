@@ -72,7 +72,27 @@ function phrase(r, L, alone) {
     if (r.isFinal && (h === 'ə' || h === 'ʌ')) return { kind: 'sub', text: `${L} 後面多唸了「ㄜ」` };
     return alone ? { kind: 'sub', text: `${L} 沒唸出來，變成拉長的 ${shortSound(h)}` } : { kind: 'omit', L, text: `${L} 沒唸出來` };
   }
-  return { kind: 'sub', text: `${L} 唸成了 ${shortSound(h)}` };
+  return { kind: 'sub', text: subText(L, e, h, alone) };
+}
+
+// 注音-style name of a sound for a learner: vowels as 「短而輕的ㄧ」「ㄝ」, consonants by their letters
+export const zySound = p => (isV(p) ? zhApprox(p) || ZY[ipaNorm(p)] : '') || shortSound(p);
+const looksSame = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+const LONG = new Set(['i', 'u', 'ɑ', 'ɝ']), SHORT = new Set(['ɪ', 'ʊ', 'ʌ', 'ɚ']);
+// "X 唸成了 Y" without ever printing two sides that look alike (the letters "e" vs the sound "e" was unreadable)
+export function subText(L, e, h, alone = true) {
+  if (isV(e) || isV(h)) {
+    const sp = x => (/^[a-z]/i.test(x) ? ' ' + x : x), E = sp(zySound(e)), H = sp(zySound(h));
+    if (!looksSame(E, H)) return alone || looksSame(L, H) ? `${L} 應該唸${E}，你唸成了${H}` : `${L} 唸成了${H}（該唸${E}）`;
+    if (SHORT.has(e) && LONG.has(h)) return `${L} 唸太長太用力了`;
+    if (LONG.has(e) && SHORT.has(h)) return `${L} 唸太短太輕了`;
+    return `${L} 唸得不夠準`;
+  }
+  const H = shortSound(h), E = shortSound(e);
+  if (!looksSame(L, H)) return `${L} 唸成了 ${H}`;
+  if (!looksSame(E, H)) return `${L} 應該唸 ${E}，你唸成了 ${H}`;
+  const ZE = zhApprox(e), ZH = zhApprox(h);
+  return looksSame(ZE, ZH) ? `${L} 唸得不夠準` : `${L} 應該唸${ZE}，你唸成了${ZH}`;
 }
 
 // "-ducts": the error region plus the syllable start before it, with '-' where the word continues
@@ -102,17 +122,38 @@ export function regionSentence(word, rows, reg, spans = letterSpans(word, rows))
 }
 
 // 「ㄉㄜ」後舌根往上頂住停一下，再快速吐出「ㄘ」
+// stress note for a vowel row, only when the reference pronunciation told us (see stress.js) and the region
+// contains a mispronounced unstressed vowel — that is when 「輕讀／重音」 actually helps
+const stressNote = r => (r.stress === 0 ? '（輕讀）' : r.stress === 1 ? '（重音，唸重一點）' : '');
+function needsStress(rows, reg) {
+  return rows.slice(reg.a, reg.b + 1).some(r => r.bad && r.stress === 0 && isV(r.exp) && !['ə', 'ɪ', 'ɚ'].includes(ipaNorm(r.heard)));
+}
+// where the main stress is, as letters: "-fer"
+export function stressedPart(word, rows) {
+  const k = rows.findIndex(r => r.stress === 1);
+  const sp = letterSpans(word, rows);
+  if (k < 0 || !sp || rows.filter(r => isV(r.exp)).length < 2) return '';
+  let a = k;
+  while (a > 0 && !isV(rows[a - 1].exp)) a--;
+  if (k - a >= 2 && a > 0) a++; // keep one consonant with the previous syllable when there are several
+  let b = k;
+  while (b + 1 < rows.length && !isV(rows[b + 1].exp) && (b + 2 >= rows.length || !isV(rows[b + 2].exp))) b++;
+  const from = sp[a][0], to = sp[b][1];
+  return (from > 0 ? '-' : '') + word.slice(from, to) + (to < word.length ? '-' : '');
+}
+
 export function regionHowTo(rows, reg) {
   const exps = rows.slice(reg.a, reg.b + 1).map(r => ipaNorm(r.exp));
+  const st = needsStress(rows, reg);
   if (exps.length === 1 && isV(exps[0])) {
     const r = rows[reg.a];
-    return `${ZY[exps[0]] ? `「${ZY[exps[0]]}」這個音：` : ''}${artNote(r.exp)}`;
+    return `唸${zySound(exps[0])}${st ? stressNote(r) : ''}：${artNote(r.exp)}`;
   }
   const acts = [];
   for (let i = 0; i < exps.length; i++) {
     const p = exps[i], q = exps[i + 1];
     if ((p === 't' && q === 's') || (p === 'd' && q === 'z')) { acts.push(ACT[p + q]); i++; continue; }
-    acts.push(isV(p) ? `唸${zhApprox(p) || `「${ZY[p] || ''}」`}` : (ACT[p] || `唸出 ${shortSound(p)}`));
+    acts.push(isV(p) ? `唸${zhApprox(p) || `「${ZY[p] || ''}」`}${st ? stressNote(rows[reg.a + i]) : ''}` : (ACT[p] || `唸出 ${shortSound(p)}`));
   }
   if (exps.length === 1 && ZY_CLOSE.has(exps[0]) && !acts[0].includes('「')) acts[0] += `（像「${ZY[exps[0]]}」）`;
   // anchor: the sounds just before the region, back to (and including) the previous vowel's syllable
@@ -128,7 +169,12 @@ export function regionHowTo(rows, reg) {
 export function wordFix(w) {
   const rows = w.rows || [], word = w.word || '';
   const spans = letterSpans(word, rows);
-  const regions = errorRegions(rows).map(reg => ({ ...reg, sentence: regionSentence(word, rows, reg, spans), howto: regionHowTo(rows, reg) }));
+  const regions = errorRegions(rows).map(reg => {
+    let howto = regionHowTo(rows, reg);
+    const sp = needsStress(rows, reg) && !rows.slice(reg.a, reg.b + 1).some(r => r.stress === 1) && stressedPart(word, rows);
+    if (sp) howto += `；重音在 ${sp}`;
+    return { ...reg, sentence: regionSentence(word, rows, reg, spans), howto };
+  });
   const segments = [];
   if (!spans) segments.push({ text: word, bad: false });
   else {

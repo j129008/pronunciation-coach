@@ -112,7 +112,7 @@ export function saveConf(c) { localStorage.phConf = JSON.stringify(c); }
 export function clearConf() { localStorage.removeItem('phConf'); }
 
 // backup / restore
-const BACKUP_KEYS = ['progress', 'days', 'dayScores', 'weakWords', 'weakItems', 'phConf'];
+const BACKUP_KEYS = ['progress', 'days', 'dayScores', 'weakWords', 'weakItems', 'phConf', 'wordQueue'];
 export function exportProgress() {
   const o = { version: 1, exported: new Date().toISOString() };
   for (const k of BACKUP_KEYS) o[k] = lsGet(k, {});

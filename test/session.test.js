@@ -119,3 +119,14 @@ test('router: parse / format round trip, legacy numeric links, tabs', () => {
   assert.equal(tabOf({ name: 'done' }), 'today');
   assert.equal(tabOf({ name: 'practice' }), null);
 });
+
+test('router: 單字練習 (#/practice/<id>/word/<word>) and 要練的字 (#/words)', () => {
+  assert.deepEqual(parseRoute('#/practice/5873/word/prefer'), { name: 'practice', id: 5873, word: 'prefer' });
+  assert.deepEqual(parseRoute("#/practice/12/word/don't"), { name: 'practice', id: 12, word: "don't" });
+  assert.deepEqual(parseRoute('#/practice/5873/word'), { name: 'practice', id: 5873 });
+  assert.equal(routeHash({ name: 'practice', id: 5873, word: 'prefer' }), '#/practice/5873/word/prefer');
+  assert.deepEqual(parseRoute(routeHash({ name: 'practice', id: 3, word: 'café' })), { name: 'practice', id: 3, word: 'café' });
+  assert.deepEqual(parseRoute('#/words'), { name: 'words' });
+  assert.equal(routeHash({ name: 'words' }), '#/words');
+  assert.equal(tabOf({ name: 'words' }), 'today');
+});

@@ -13,15 +13,20 @@ import { oneLineHint, lowConfidence, LOW_CONF_NOTE, mainError } from './hints.js
 import { wordFix } from './wordfix.js';
 import { chip, ipaHtml, ipaRow, showIpaTable, handleIpaClick } from './ipaui.js';
 import { userLabel } from './lessons.js';
+import { createRecorder } from './recorder.js';
+import { applyRef } from './stress.js';
+import * as WQ from './wordqueue.js';
+import { initDrill, openDrill, closeDrill, drillOpen, drillTake, stopDrillAudio, drillRecKey } from './drill.js';
 
 const TL = { sentence: '句子', vocab: '單字', extra: '補充' };
 export const ST = { new: ['未練', '#868e96'], weak: ['要加強', '#e03131'], fair: ['還不錯', '#f08c00'], good: ['已熟練', '#2f9e44'], due: ['待複習', '#7048e8'] };
 
-// env: {onAttempt(item, result), nextLabel(), lessonTitle(item), openIpa()}
-let env = { onAttempt() {}, nextLabel: () => '下一題', lessonTitle: d => d.l || '', openIpa() {} };
+// env: {onAttempt(item, result), nextLabel(), lessonTitle(item), openIpa(), refIpa(word), openWord(id, word), closeWord(id), nextWord(item, word)}
+let env = { onAttempt() {}, nextLabel: () => '下一題', lessonTitle: d => d.l || '', openIpa() {}, refIpa: () => '', openWord() {}, closeWord() {}, nextWord: () => false };
 let cur = null;
-let recog = null, mr = null, chunks = [], stream = null, busy = false, azRec = null;
+let busy = false;
 let lastCap = null, azWords = [], suppressRec = false;
+let lastBad = []; // mispronounced words of the last take of this sentence: [{w, k, heard}]
 
 export const getCur = () => cur;
 const statusOf = (id, now) => P.statusOf(id, now);
@@ -39,20 +44,22 @@ export function showItem(d, reason = '') {
   $('result').hidden = true;
   $('summary').innerHTML = '';
   $('interim').textContent = '';
+  if (recorder.busy) recorder.cancel();
   cancelAll();
   clearMine();
+  closeDrill();
   lastCap = null;
   azWords = [];
+  lastBad = [];
+  $('drillBar').innerHTML = '';
   $('status').innerHTML = '';
-  $('rec').textContent = '開始錄音';
-  $('rec').classList.remove('on');
+  sentenceUi.state('idle', sentenceCtx());
 }
 // leaving the practice screen: stop recording, playback and speech
 export function stopAll() {
   cancelAll();
-  if (azRec) { const c = azRec; azRec = null; c.stop(); }
-  if (recog) { try { recog.abort(); } catch (e) { /* not running */ } }
-  stopAudio();
+  recorder.cancel();
+  stopDrillAudio();
   busy = false;
 }
 
@@ -91,7 +98,21 @@ function showResult(best, alts) {
   $('secIssues').hidden = false;
   P.recordWeakWords(a);
   P.setWeakItem(cur.i, score);
-  if (!suppressRec) recordAttempt(score);
+  if (!suppressRec) { noteBadWords(WQ.badWordsText(best.disp)); recordAttempt(score); }
+}
+// mispronounced words of this take → 「單獨練唸錯的字」 buttons + the persisted 要練的字 queue
+function noteBadWords(list) {
+  lastBad = list;
+  if (list.length) WQ.saveQueue(WQ.addMisses(WQ.loadQueue(), { id: cur.i, sentence: cur.e, words: list }));
+  $('drillBar').innerHTML = list.length && cur.e.trim().includes(' ')
+    ? `<div class="drillbar"><b>單獨練唸錯的字</b> <small class="muted">一次一個字，唸到 OK 為止</small><div>${list.map(x => `<button class="btn sm" data-drill="${esc(x.w)}">${esc(x.w)}</button>`).join('')}</div></div>` : '';
+}
+// the words to walk through when 單字練習 opens on `word` for this item
+export function drillList(item, word) {
+  const k = WQ.wordKey(word);
+  let list = item === cur && lastBad.some(x => x.k === k) ? lastBad : WQ.queueFor(WQ.loadQueue(), item.i).map(a => ({ w: a.w, k: a.k }));
+  if (!list.some(x => x.k === k)) list = [{ w: word, k }, ...list];
+  return list;
 }
 
 // ---- recording (default: Web Speech) ----
@@ -196,10 +217,11 @@ function moreHtml(w) {
   return h ? `<details class="more"><summary>更多說明</summary>${h}</details>` : '';
 }
 function fixHtml(w, wi) {
-  if (w.et === 'Omission') return `<li class="fix"><div class="fixword"><span class="fl">${esc(w.word)}</span></div><div class="fixsay">整個字沒唸出來</div><div class="fixbtns"><button class="btn sm" data-std="${wi}">標準</button></div></li>`;
+  const drill = cur && /\s/.test(cur.e.trim()) ? `<button class="btn sm drillbtn" data-drill="${esc(w.word)}">單練這個字</button>` : '';
+  if (w.et === 'Omission') return `<li class="fix"><div class="fixword"><span class="fl">${esc(w.word)}</span></div><div class="fixsay">整個字沒唸出來</div><div class="fixbtns"><button class="btn sm" data-std="${wi}">標準</button>${drill}</div></li>`;
   const f = wordFix(w);
   return `<li class="fix">${fixWordHtml(f)}${f.regions.map(reg => regionHtml(wi, w, reg, true)).join('')}
- <div class="fixbtns">${heardAs(w.word, w.rows) ? likeBtn(w, wi) : `<button class="btn sm" data-std="${wi}">標準</button>`}</div>${moreHtml(w)}</li>`;
+ <div class="fixbtns">${heardAs(w.word, w.rows) ? likeBtn(w, wi) : `<button class="btn sm" data-std="${wi}">標準</button>`}${drill}</div>${moreHtml(w)}</li>`;
 }
 // highlight the sound being played (one phoneme if `only` is given, otherwise any mispronounced one)
 let hlKey = null;
@@ -286,93 +308,107 @@ function toggleMine() {
   const a = $('myAudio');
   if (!a.paused) { a.pause(); a.currentTime = 0; } else playMine();
 }
-function syncRecButtons() { $('playMine').disabled = $('reRec').disabled = busy; }
+// ---- recording: one take at a time through the recorder controller ----
+// The old flow had no way out of a take: 重錄 was hidden/disabled while recording and, when enabled, just
+// clicked 開始錄音 — which while recording meant "stop and score". Now 重來 / Esc discards the take
+// (it is never sent for scoring) and starts a new one; 取消 discards and stops.
 // silence everything that could bleed into the mic before a new take
-function prepareToRecord() { cancelAll(); $('myAudio').pause(); }
+function prepareToRecord() { cancelAll(); $('myAudio').pause(); stopDrillAudio(); }
 const useAzure = () => localStorage.azOn === '1' && !!localStorage.azKey && !!localStorage.azRegion;
 function updBadge() {
   const b = $('modeBadge');
   if (b) { const az = useAzure(); b.textContent = az ? 'Azure 評分中' : '預設模式'; b.style.background = az ? '#0a7' : '#888'; }
 }
-async function startAudio() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mr = new MediaRecorder(stream);
-    chunks = [];
-    mr.ondataavailable = e => chunks.push(e.data);
-    mr.onstop = () => {
-      setMyAudio(new Blob(chunks, { type: mr.mimeType }));
-      stream.getTracks().forEach(t => t.stop());
-    };
-    mr.start();
-  } catch (e) { status('無法使用麥克風：' + esc(e.message)); }
-}
-function stopAudio() { if (mr && mr.state !== 'inactive') mr.stop(); }
-
-async function defaultRecognize() {
+const SR_ERR = { 'not-allowed': '（請允許麥克風；file:// 可能被擋，請改用 localhost）', network: '（需連網，Chrome 語音辨識走 Google 伺服器）' };
+// Web Speech recognition + a MediaRecorder copy of the take (for 播放我的錄音)
+async function openWeb(ctx) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return alert('此瀏覽器不支援語音辨識，請使用 Chrome 或 Edge。');
-  const item = cur;
-  prepareToRecord();
-  recog = new SR();
-  recog.lang = 'en-US'; recog.interimResults = true; recog.maxAlternatives = 5; recog.continuous = false;
+  if (!SR) throw new Error('此瀏覽器不支援語音辨識，請使用 Chrome 或 Edge。');
+  const r = new SR();
+  r.lang = 'en-US'; r.interimResults = true; r.maxAlternatives = 5; r.continuous = false;
   const finals = [];
-  busy = true;
-  syncRecButtons();
-  $('rec').textContent = '停止';
-  $('rec').classList.add('on');
-  status('請開始唸…');
-  await startAudio();
-  recog.onresult = e => {
+  let mrec = null, mstream = null, keep = true, error = '';
+  const chunks = [];
+  try {
+    mstream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mrec = new MediaRecorder(mstream);
+    mrec.ondataavailable = e => chunks.push(e.data);
+    mrec.start();
+  } catch (e) { ctx.ui.status('無法錄下聲音（仍可辨識）：' + esc(e.message)); }
+  const audio = new Promise(res => {
+    if (!mrec) return res(null);
+    mrec.onstop = () => { mstream.getTracks().forEach(t => t.stop()); res(keep ? new Blob(chunks, { type: mrec.mimeType }) : null); };
+  });
+  const ended = new Promise(res => { r.onend = res; });
+  r.onresult = e => {
     let it = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const r = e.results[i];
-      if (r.isFinal) finals.push([...r].map(x => x.transcript)); else it += r[0].transcript;
+      const x = e.results[i];
+      if (x.isFinal) finals.push([...x].map(a => a.transcript)); else it += x[0].transcript;
     }
-    $('interim').textContent = it;
+    ctx.ui.interim(it);
   };
-  recog.onerror = e => status('辨識錯誤：' + e.error + (e.error === 'not-allowed' ? '（請允許麥克風；file:// 可能被擋，請改用 localhost）' : e.error === 'network' ? '（需連網，Chrome 語音辨識走 Google 伺服器）' : ''));
-  recog.onend = () => {
-    busy = false;
-    syncRecButtons();
-    $('rec').textContent = '開始錄音';
-    $('rec').classList.remove('on');
-    stopAudio();
-    $('interim').textContent = '';
-    if (cur !== item) { clearMine(); return; } // user moved on: don't score the wrong item
-    if (!finals.length) { status('沒有聽到聲音，請再試一次。'); return; }
+  r.onerror = e => { error = e.error; };
+  r.start();
+  const done = ended.then(() => { if (mrec && mrec.state !== 'inactive') mrec.stop(); return audio; }).then(blob => ({ mode: 'web', finals, blob, error }));
+  return { finish: () => r.stop(), discard: () => { keep = false; try { r.abort(); } catch (e) { /* not running */ } }, done };
+}
+async function openAzure(ctx) {
+  const cap = await captureMic({ maxMs: ctx.kind === 'word' ? 10000 : 30000 });
+  return { finish: () => cap.stop(), discard: () => cap.stop(), done: cap.done.then(r => ({ mode: 'azure', ...r })) };
+}
+const recorder = createRecorder({
+  backend: { open: ctx => (ctx.web || !useAzure() ? openWeb(ctx) : openAzure(ctx)) },
+  onState: (s, ctx) => ctx.ui.state(s, ctx),
+  onTake: (res, ctx) => { ctx.ui.interim(''); if (ctx.item !== cur) return; if (ctx.kind === 'word') drillTake(res, ctx); else sentenceTake(res, ctx); },
+  onError: (e, ctx) => ctx.ui.status('無法使用麥克風：' + esc(e.message)),
+});
+// sentence UI: big button, 重來（這次不算）, 取消
+const sentenceUi = {
+  status, interim: t => { $('interim').textContent = t; },
+  state(s, ctx) {
+    const on = s !== 'idle';
+    busy = on;
+    $('rec').textContent = on ? (ctx.web || !useAzure() ? '停止' : '停止並評分') : '開始錄音';
+    $('rec').classList.toggle('on', on);
+    $('playMine').disabled = on;
+    $('reRec').textContent = on ? '重來（這次不算）' : '重錄';
+    $('reRec').title = on ? '丟掉這次錄音、不送去評分，馬上重新開始（Esc）' : '';
+    $('reRec').hidden = !on && !myUrl;
+    $('recCancel').hidden = !on;
+    if (s === 'recording') status((ctx.web || !useAzure() ? '請開始唸…' : 'Azure 模式：請唸出整句，唸完按「停止並評分」（最長 30 秒）') + '　唸錯了？按「重來」或 Esc，這次不會評分。');
+  },
+};
+const sentenceCtx = (extra = {}) => ({ kind: 'sentence', item: cur, ui: sentenceUi, ...extra });
+function startSentence(extra) { if (!cur || recorder.busy) return; prepareToRecord(); recorder.start(sentenceCtx(extra)); }
+function restartTake() {
+  if (!recorder.busy) return false;
+  prepareToRecord();
+  recorder.restart();
+  recorder.ctx && recorder.ctx.ui.status('已丟掉這次錄音，重新開始…');
+  return true;
+}
+function cancelTake() { if (!recorder.busy) return; const c = recorder.ctx; recorder.cancel(); c.ui.status('已取消，這次不會評分。'); }
+
+async function sentenceTake(res, ctx) {
+  const item = ctx.item;
+  if (res.mode === 'web') {
+    if (res.blob) setMyAudio(res.blob);
+    const { finals } = res;
+    if (!finals.length) { status(res.error && res.error !== 'no-speech' ? '辨識錯誤：' + res.error + (SR_ERR[res.error] || '') : '沒有聽到聲音，請再試一次。'); return; }
     const tops = finals.map(f => f[0]);
     const set = new Set([tops.join(' ')]);
     finals.forEach((f, i) => f.forEach(alt => { const c = tops.slice(); c[i] = alt; set.add(c.join(' ')); }));
     finals.flat().forEach(x => set.add(x));
     const combos = [...set];
-    const res = combos.map(h => scoreHyp(cur.e, h));
+    const scored = combos.map(h => scoreHyp(item.e, h));
     let bi = 0;
-    res.forEach((r, i) => { if (r.score > res[bi].score) bi = i; });
+    scored.forEach((r, i) => { if (r.score > scored[bi].score) bi = i; });
     status('完成。可以按下方播放器聽自己的聲音，再按「聽示範」對照。');
-    showResult(res[bi], [combos[bi], ...combos.filter((c, i) => i !== bi).slice(0, 4)]);
-  };
-  recog.start();
-}
-
-// ---- recording (Azure) ----
-function azReset() { busy = false; syncRecButtons(); $('rec').textContent = '開始錄音'; $('rec').classList.remove('on'); }
-async function azureAssess() {
-  if (azRec) { azRec.stop(); return; }
-  const item = cur;
-  prepareToRecord();
-  let cap;
-  try { cap = await captureMic({ maxMs: 30000 }); } catch (e) { status('無法使用麥克風：' + esc(e.message)); return; }
-  azRec = cap;
-  busy = true;
-  syncRecButtons();
-  $('rec').textContent = '停止並評分';
-  $('rec').classList.add('on');
-  status('Azure 模式：請唸出整句，唸完按「停止並評分」（最長 30 秒）');
-  const { data, rate, peak } = await cap.done;
-  azRec = null;
-  azReset();
-  if (cur !== item) return; // user moved on: don't score the wrong item
+    showResult(scored[bi], [combos[bi], ...combos.filter((c, i) => i !== bi).slice(0, 4)]);
+    return;
+  }
+  const { data, rate, peak } = res;
   lastCap = { data, rate };
   const wav = encodeWav(data, rate);
   setMyAudio(wav);
@@ -382,17 +418,16 @@ async function azureAssess() {
   }
   status(`上傳到 Azure 評分中…（${(data.length / rate).toFixed(1)} 秒）`);
   try {
-    const res = await assess(wav, item.e, { key: localStorage.azKey, region: localStorage.azRegion });
+    const r = await assess(wav, item.e, { key: localStorage.azKey, region: localStorage.azRegion });
     if (cur !== item) return;
-    if (!res.ok) { status(esc(res.message)); return; }
-    renderAzure(res.json);
+    if (!r.ok) { status(esc(r.message)); return; }
+    renderAzure(r.json);
   } catch (e) {
     if (cur !== item) return;
     status('Azure 錯誤：' + esc(e.message) + ' → 改用預設模式，請再唸一次');
-    defaultRecognize();
+    startSentence({ web: true });
   }
 }
-
 function renderAzure(j) {
   const nb = j.NBest[0], p = nb.PronunciationAssessment || nb;
   const text = j.DisplayText || nb.Display || nb.Lexical || '';
@@ -401,8 +436,9 @@ function renderAzure(j) {
   showResult(base, [text]);
   suppressRec = false;
   const f = v => v == null ? '-' : Math.round(v);
-  const words = (nb.Words || []).map(analyzeWord);
+  const words = (nb.Words || []).map(analyzeWord).map(w => applyRef(w, env.refIpa(w.word)));
   azWords = words;
+  noteBadWords(WQ.badWordsAzure(words));
   const issues = [];
   const conf = P.getConf();
   for (const [wi, w] of words.entries()) {
@@ -462,6 +498,8 @@ function onAzureClick(e) {
   if (!t.closest) return;
   if (handleIpaClick(e)) return;
   if (t.closest('[data-goipa]')) { env.openIpa(); return; }
+  const dr = t.closest('[data-drill]');
+  if (dr && cur) { env.openWord(cur.i, dr.dataset.drill); return; }
   const std = t.closest('[data-std]'), mine = t.closest('[data-mine]'), card = t.closest('.wcard'), ab = t.closest('#abAll');
   const W = azWords;
   const seg = t.closest('[data-seg]'), like = t.closest('[data-like]'), segr = t.closest('[data-segr]'), abr = t.closest('[data-abr]');
@@ -522,13 +560,26 @@ function onAzureClick(e) {
 // ---- setup (called once by the shell) ----
 export function initPractice(e) {
   env = { ...env, ...e };
-  $('rec').onclick = async () => {
+  $('rec').onclick = () => {
     if (!cur) return;
-    if (azRec) return azRec.stop();
-    if (busy) { recog && recog.stop(); return; }
-    if (useAzure()) return azureAssess();
-    defaultRecognize();
+    if (recorder.busy) { if (recorder.ctx.kind === 'sentence') recorder.finish(); return; }
+    startSentence();
   };
+  $('reRec').onclick = () => { if (!restartTake()) startSentence(); };
+  $('recCancel').onclick = cancelTake;
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || document.body.dataset.view !== 'practice' || !recorder.busy) return;
+    e.preventDefault();
+    restartTake();
+  });
+  initDrill({
+    recorder, prepareToRecord, useAzure, stdRate,
+    refIpa: w => env.refIpa(w),
+    getCur: () => cur,
+    close: item => env.closeWord(item.i),
+    next: (item, word) => env.nextWord(item, word),
+    go: (item, word) => env.openWord(item.i, word),
+  });
   $('listen').onclick = () => cur && say(cur.e);
   $('slow').checked = localStorage.slow === '1';
   $('slow').onchange = ev => { localStorage.slow = ev.target.checked ? '1' : '0'; };
@@ -540,8 +591,9 @@ export function initPractice(e) {
   $('abLoop').onchange = ev => { localStorage.abLoop = ev.target.checked ? '1' : '0'; };
   $('abStop').onclick = cancelAll;
   $('playMine').onclick = toggleMine;
-  $('reRec').onclick = () => $('rec').click();
   $('words').onclick = ev => { const s = ev.target.closest('[data-w]'); if (s) speak(s.dataset.w, 0.7); };
   document.addEventListener('click', onAzureClick);
 }
-export { stdRate, useAzure, updBadge };
+// Space in practice: the drill's record button while 單字練習 is open, otherwise the sentence's
+export function recKey() { if (drillOpen()) drillRecKey(); else $('rec').click(); }
+export { stdRate, useAzure, updBadge, openDrill, closeDrill, drillOpen };

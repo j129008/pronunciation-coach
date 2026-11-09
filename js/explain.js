@@ -80,7 +80,7 @@ const SN = {
   'ɹ': ['r', '舌頭往後捲的 r，不是中文的ㄖ'], w: ['w', '快速的ㄨ'], j: ['y', '快速的ㄧ'], h: ['h', '輕輕的ㄏ'],
   'ɾ': ['輕彈的 t/d', '輕輕彈一下的ㄉ'], 'ʔ': ['喉嚨卡一下', '喉嚨卡一下'],
   'ʌ': ['u（cup 的 u）', '短短的ㄚ'], 'ɑ': ['o（hot 的 o）', '大開口的ㄚ'], 'æ': ['a（cat 的 a）', 'ㄝ和ㄚ之間'], 'ɛ': ['e（bed 的 e）', 'ㄝ'],
-  'ɪ': ['i（sit 的 i）', '短的ㄧ'], i: ['ee（see 的 ee）', '長的ㄧ'], 'ʊ': ['oo（book 的 oo）', '短的ㄨ'], u: ['oo（food 的 oo）', '長的ㄨ'],
+  'ɪ': ['i（sit 的 i）', '短而輕的ㄧ'], i: ['ee（see 的 ee）', '長的ㄧ'], 'ʊ': ['oo（book 的 oo）', '短的ㄨ'], u: ['oo（food 的 oo）', '長的ㄨ'],
   'ə': ['a（about 的 a）', '輕輕的ㄜ'], 'ɚ': ['er（teacher 的 er）', '輕輕的ㄦ'], 'ɝ': ['er（bird 的 er）', 'ㄦ'],
   'eɪ': ['ay（day 的 ay）', 'ㄟ'], 'aɪ': ['i（my 的 i）', 'ㄞ'], 'ɔɪ': ['oy（boy 的 oy）', 'ㄛㄧ'], 'aʊ': ['ow（now 的 ow）', 'ㄠ'],
   'oʊ': ['o（go 的 o）', 'ㄡ'], 'ɔ': ['aw（law 的 aw）', 'ㄛ'],
@@ -271,7 +271,10 @@ export function explain(exp, heard, { isFinal = false, word = '', letters = '' }
     return { type: 'sub', typeLabel: '唸成別的音', verdict: `${L}唸得不夠準，聽起來接近別的音；要唸 ${E}（${zh(e)}）：${art(e)}。`, fix: `把這個音單獨拖長慢唸，對照 ${E} 的嘴型，再放回「${word || '這個字'}」裡。`, pairs: [] };
   }
   const H = soundLabel(h);
-  const lead = (letters && letters.toLowerCase() === E) ? `${E} 唸成了 ${H}` : `${L}該唸 ${E}，你唸成了 ${H}`;
+  const vowel = VOWELS.has(e) || VOWELS.has(h);
+  // vowels are named in 注音 (「應該唸短而輕的ㄧ，你唸成了ㄝ」) — the letters "e" vs a sound written "e" was unreadable
+  const lead = vowel && zh(e) && zh(h) && zh(e) !== zh(h) ? `${L}應該唸${zh(e)}，你唸成了${zh(h)}`
+    : (letters && letters.toLowerCase() === E) ? `${E} 唸成了 ${H}` : `${L}該唸 ${E}，你唸成了 ${H}`;
   const c = CONF[e + '|' + h];
   let pairs = cap(pairsFor(e, h));
   if (!pairs.length && exampleWord(e) && exampleWord(h)) pairs = [[exampleWord(e), exampleWord(h)]];

@@ -9,6 +9,7 @@ import { missRanking, phInfo } from './ipa.js';
 import { explain, respell } from './explain.js';
 import { ST } from './practice.js';
 import { lsGet } from './util.js';
+import * as WQ from './wordqueue.js';
 
 const TL = { sentence: '句子', vocab: '單字', extra: '補充' };
 const KL = { pre: '課前', post: '課後', class: '課堂' };
@@ -61,6 +62,22 @@ export function renderToday() {
   const mastered = App.items.filter(d => ['good', 'due'].includes(status(d.i))).length;
   $('todayStats').innerHTML = stat(P.todayCount(), '今天練了') + stat(P.streak(), '連續天數') + stat(all ? Math.round(100 * mastered / all) + '%' : '-', '已熟練');
   $('todayLessons').innerHTML = App.catalog.lessons.slice(0, 3).map(lessonCard).join('') || '<p class="muted">還沒有課程。</p>';
+  const q = WQ.sortQueue(WQ.loadQueue()).filter(a => App.byId.has(a.id));
+  $('todayWords').hidden = !q.length;
+  $('todayWords').innerHTML = q.length ? `<h2>要練的字（${q.length}）</h2><p>${q.slice(0, 8).map(a => `<b>${esc(a.w)}</b>`).join('、')}${q.length > 8 ? '…' : ''}</p>
+<div class="btnrow"><button class="btn primary" data-act="word-run">一個字一個字練</button><a class="btn" href="#/words">看全部</a></div>` : '';
+}
+
+// ---- 要練的字 ----
+const ctxHtml = (s, w) => WQ.markWord(s, w).map(p => (p.hit ? `<mark>${esc(p.text)}</mark>` : esc(p.text))).join('');
+export function renderWords() {
+  const q = WQ.sortQueue(WQ.loadQueue()).filter(a => App.byId.has(a.id));
+  $('wordsBody').innerHTML = q.length
+    ? `<div class="btnrow"><button class="btn primary big" data-act="word-run">依序練全部（${q.length} 個）</button></div>
+<ul class="wq">${q.map(a => `<li><div class="wq-w"><b>${esc(a.w)}</b> <small class="muted">錯 ${a.miss} 次${a.heard ? `・聽成「${esc(a.heard)}」` : ''}</small></div>
+<div class="wq-s">${ctxHtml(a.s, a.w)}</div>
+<div class="btnrow"><button class="btn sm primary" data-act="drill" data-id="${a.id}" data-w="${esc(a.w)}">練這個字</button><button class="btn sm" data-act="unqueue" data-id="${a.id}" data-w="${esc(a.w)}">移除</button></div></li>`).join('')}</ul>`
+    : '<p>目前沒有要練的字。練句子時唸錯的字會出現在這裡。</p><a class="btn" href="#/today">回今天</a>';
 }
 
 // ---- 課程 ----
